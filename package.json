@@ -18,6 +18,17 @@
       "mode": "view"
     }
   ],
+  "preferences": [
+    {
+      "name": "developerFolder",
+      "title": "Developer Folder",
+      "description": "Path to your main developer folder containing all your repos",
+      "type": "textfield",
+      "default": "~/Developer",
+      "placeholder": "~/Developer",
+      "required": false
+    }
+  ],
   "dependencies": {
     "@raycast/api": "^1.64.0",
     "@raycast/utils": "^1.10.0",

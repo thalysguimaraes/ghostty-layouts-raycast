@@ -12,13 +12,14 @@ import {
 import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
 import { launchGhostty, createLayoutStructure, isGhosttyRunning, GhosttyTarget } from "./utils";
+import RepoPicker from "./repo-picker";
 
 interface Props {
   layout: Layout;
 }
 
 export default function LaunchLayout({ layout }: Props) {
-  const { pop } = useNavigation();
+  const { pop, push } = useNavigation();
   const [target, setTarget] = useState<GhosttyTarget>("new-window");
   const [isGhosttyActive, setIsGhosttyActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,11 +43,21 @@ export default function LaunchLayout({ layout }: Props) {
   }
 
   async function handleLaunch() {
+    // If using current tab, launch directly (uses current working directory)
+    if (target === "current") {
+      return launchInCurrentDirectory();
+    }
+    
+    // For new tab/window, show repo picker
+    push(<RepoPicker layout={layout} target={target} />);
+  }
+
+  async function launchInCurrentDirectory() {
     try {
       showToast({
         style: Toast.Style.Animated,
         title: "Launching layout...",
-        message: layout.name,
+        message: `${layout.name} in current directory`,
       });
 
       // Close Raycast window first to ensure Ghostty commands don't interfere with Raycast
@@ -63,7 +74,8 @@ export default function LaunchLayout({ layout }: Props) {
       // Additional delay to ensure Ghostty is ready for layout creation
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      await createLayoutStructure(layout.structure, layout.rootDirectory);
+      // Use current directory (don't specify rootDirectory)
+      await createLayoutStructure(layout.structure);
 
       showToast({
         style: Toast.Style.Success,
@@ -105,6 +117,11 @@ export default function LaunchLayout({ layout }: Props) {
         />
       )}
       
+      <Form.Description
+        title="Working Directory"
+        text={target === "current" ? "Will use the current working directory of your active terminal" : "You'll be prompted to select a repository from your developer folder"}
+      />
+      
       <Form.Dropdown
         id="target"
         title="Launch Target"
@@ -114,30 +131,23 @@ export default function LaunchLayout({ layout }: Props) {
         {isGhosttyActive && (
           <Form.Dropdown.Item
             value="current"
-            title="Current Window/Tab"
+            title="Current Window/Tab (use current directory)"
             icon={Icon.Terminal}
           />
         )}
         {isGhosttyActive && (
           <Form.Dropdown.Item
             value="new-tab"
-            title="New Tab"
+            title="New Tab (select repository)"
             icon={Icon.Plus}
           />
         )}
         <Form.Dropdown.Item
           value="new-window"
-          title="New Window"
+          title="New Window (select repository)"
           icon={Icon.NewDocument}
         />
       </Form.Dropdown>
-      
-      {layout.rootDirectory && (
-        <Form.Description
-          title="Working Directory"
-          text={layout.rootDirectory}
-        />
-      )}
     </Form>
   );
 }
