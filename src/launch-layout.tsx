@@ -23,6 +23,7 @@ export default function LaunchLayout({ layout }: Props) {
   const [target, setTarget] = useState<GhosttyTarget>("new-window");
   const [isGhosttyActive, setIsGhosttyActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [workingDirectory, setWorkingDirectory] = useState(".");
 
   useEffect(() => {
     checkGhosttyStatus();
@@ -74,8 +75,8 @@ export default function LaunchLayout({ layout }: Props) {
       // Additional delay to ensure Ghostty is ready for layout creation
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Use current directory (don't specify rootDirectory)
-      await createLayoutStructure(layout.structure);
+      // Use the specified working directory for all panes
+      await createLayoutStructure(layout.structure, workingDirectory);
 
       showToast({
         style: Toast.Style.Success,
@@ -117,10 +118,23 @@ export default function LaunchLayout({ layout }: Props) {
         />
       )}
       
-      <Form.Description
-        title="Working Directory"
-        text={target === "current" ? "Will use the current working directory of your active terminal" : "You'll be prompted to select a repository from your developer folder"}
-      />
+      {target === "current" && (
+        <Form.TextField
+          id="workingDirectory"
+          title="Working Directory"
+          placeholder="./relative/path or /absolute/path"
+          value={workingDirectory}
+          onChange={setWorkingDirectory}
+          info="Directory where all commands will run. Use '.' for current directory."
+        />
+      )}
+      
+      {target !== "current" && (
+        <Form.Description
+          title="Working Directory"
+          text="You'll be prompted to select a repository from your developer folder"
+        />
+      )}
       
       <Form.Dropdown
         id="target"

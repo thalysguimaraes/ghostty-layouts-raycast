@@ -47,6 +47,17 @@ Example prompts:
 3. Launch directly or add to your personal collection
 4. Manage your saved layouts from the main interface
 
+### Working Directory Behavior
+
+**Current Tab Mode:**
+- **First pane**: Runs in the working directory you specify (defaults to current directory ".")
+- **Additional panes**: All inherit the same working directory via `cd` commands
+- **Replaces**: The existing terminal content with your first command
+
+**New Tab/Window Mode:**
+- Shows repository picker from your developer folder
+- All panes run in the selected repository directory
+
 ## Template Requirements
 
 Some templates require specific tools to be installed:
