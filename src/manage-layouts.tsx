@@ -1,9 +1,23 @@
-import { ActionPanel, Action, List, Icon, showToast, Toast } from "@raycast/api";
+import {
+  ActionPanel,
+  Action,
+  List,
+  Icon,
+  showToast,
+  Toast,
+  LocalStorage,
+} from "@raycast/api";
 import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
-import { getLayouts, deleteLayout, LAYOUT_PRESETS, saveLayout } from "./layouts";
+import {
+  getLayouts,
+  deleteLayout,
+  LAYOUT_PRESETS,
+  saveLayout,
+} from "./layouts";
 import LaunchLayout from "./launch-layout";
-import AIBuilder from "./ai-builder";
+import AIBuilderForm from "./ai-builder-form";
+import LayoutEditor from "./layout-editor";
 import { v4 as uuidv4 } from "uuid";
 
 export default function Command() {
@@ -28,13 +42,11 @@ export default function Command() {
     }
   }
 
-
-
   async function handleDelete(layout: Layout) {
     try {
       await deleteLayout(layout.id);
       await loadLayouts();
-      
+
       showToast({
         style: Toast.Style.Success,
         title: "Layout deleted",
@@ -61,7 +73,7 @@ export default function Command() {
 
       await saveLayout(layout);
       await loadLayouts();
-      
+
       showToast({
         style: Toast.Style.Success,
         title: "Template added to your layouts",
@@ -75,8 +87,22 @@ export default function Command() {
   }
 
   return (
-    <List isLoading={isLoading}>
-      <List.Section title="Custom Layouts">
+    <List
+      isLoading={isLoading}
+      navigationTitle="Manage Ghostty Layouts"
+      searchBarPlaceholder="Search layouts..."
+    >
+      {layouts.length === 0 && (
+        <List.Section title="Getting Started">
+          <List.Item
+            title="Keyboard Shortcuts Available"
+            subtitle="Go to Raycast Settings → Extensions → Ghostty Layouts to assign hotkeys to template commands"
+            icon={Icon.Keyboard}
+          />
+        </List.Section>
+      )}
+      
+      <List.Section title="My Custom Layouts">
         {layouts.map((layout) => (
           <List.Item
             key={layout.id}
@@ -93,8 +119,11 @@ export default function Command() {
                   icon={Icon.ArrowRight}
                   target={<LaunchLayout layout={layout} />}
                 />
-
-
+                <Action.Push
+                  title="Edit Layout"
+                  icon={Icon.Pencil}
+                  target={<LayoutEditor layout={layout} onSave={loadLayouts} />}
+                />
                 <Action
                   title="Delete Layout"
                   icon={Icon.Trash}
@@ -106,28 +135,37 @@ export default function Command() {
           />
         ))}
       </List.Section>
-      
-      <List.Section title="Ready-to-Use Templates">
+
+      <List.Section 
+        title="Ready-to-Use Templates" 
+        subtitle="Templates have their own commands - assign keyboard shortcuts in Raycast Settings"
+      >
         {LAYOUT_PRESETS.map((preset) => (
           <List.Item
             key={preset.name}
             title={preset.name}
             subtitle={preset.description}
-            icon={Icon[preset.icon as keyof typeof Icon] || Icon.AppWindowGrid3x3}
+            icon={
+              Icon[preset.icon as keyof typeof Icon] || Icon.AppWindowGrid3x3
+            }
             actions={
               <ActionPanel>
                 <Action.Push
                   title="Launch Template"
                   icon={Icon.ArrowRight}
-                  target={<LaunchLayout layout={{
-                    id: 'temp-' + preset.name,
-                    name: preset.name,
-                    description: preset.description,
-                    structure: preset.structure
-                  }} />}
+                  target={
+                    <LaunchLayout
+                      layout={{
+                        id: "temp-" + preset.name,
+                        name: preset.name,
+                        description: preset.description,
+                        structure: preset.structure,
+                      }}
+                    />
+                  }
                 />
                 <Action
-                  title="Add to My Layouts"
+                  title="Create Custom Layout from Template"
                   icon={Icon.Plus}
                   onAction={() => handleUseTemplate(preset.name)}
                 />
@@ -136,7 +174,7 @@ export default function Command() {
           />
         ))}
       </List.Section>
-      
+
       <List.Section title="Create New Layout">
         <List.Item
           title="AI Layout Builder"
@@ -146,7 +184,7 @@ export default function Command() {
             <ActionPanel>
               <Action.Push
                 title="Open AI Builder"
-                target={<AIBuilder onSave={loadLayouts} />}
+                target={<AIBuilderForm onSave={loadLayouts} />}
               />
             </ActionPanel>
           }

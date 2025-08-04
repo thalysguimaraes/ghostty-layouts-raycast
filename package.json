@@ -3,7 +3,7 @@
   "name": "ghostty-layouts",
   "title": "Ghostty Layouts",
   "description": "Manage and launch terminal layout templates for Ghostty",
-  "icon": "command-icon.png",
+  "icon": "icon.png",
   "author": "thalysguimaraes",
   "categories": [
     "Developer Tools"
@@ -11,10 +11,17 @@
   "license": "MIT",
   "commands": [
     {
-      "name": "index",
+      "name": "manage-layouts",
       "title": "Manage Ghostty Layouts",
       "subtitle": "Create and launch terminal layouts",
       "description": "Manage your Ghostty terminal layout templates",
+      "mode": "view"
+    },
+    {
+      "name": "ai-builder",
+      "title": "Build Layout with AI",
+      "subtitle": "Create a custom layout using AI",
+      "description": "Describe your ideal terminal layout and let AI create it",
       "mode": "view"
     }
   ],
@@ -26,6 +33,14 @@
       "type": "textfield",
       "default": "~/Developer",
       "placeholder": "~/Developer",
+      "required": false
+    },
+    {
+      "name": "openaiApiKey",
+      "title": "OpenAI API Key",
+      "description": "Your OpenAI API key for AI Layout Builder. Get one at https://platform.openai.com/api-keys",
+      "type": "password",
+      "placeholder": "sk-...",
       "required": false
     }
   ],

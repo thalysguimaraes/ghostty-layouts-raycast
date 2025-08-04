@@ -20,6 +20,8 @@ import { homedir } from "os";
 interface Props {
   layout: Layout;
   target: GhosttyTarget;
+  useCurrentTab?: boolean;
+  currentDirectory?: string;
 }
 
 interface RepoFolder {
@@ -32,7 +34,7 @@ interface Preferences {
   developerFolder: string;
 }
 
-export default function RepoPicker({ layout, target }: Props) {
+export default function RepoPicker({ layout, target, useCurrentTab, currentDirectory }: Props) {
   const { pop } = useNavigation();
   const [repos, setRepos] = useState<RepoFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,6 +42,13 @@ export default function RepoPicker({ layout, target }: Props) {
   const preferences = getPreferenceValues<Preferences>();
 
   useEffect(() => {
+    // Temporarily disabled current tab functionality
+    // if (useCurrentTab && currentDirectory) {
+    //   handleLaunchInRepo(currentDirectory);
+    //   return;
+    // }
+
+    // Set up repo picker
     const developerPath = preferences.developerFolder.replace(/^~/, homedir());
     setCurrentPath(developerPath);
   }, []);
@@ -57,6 +66,11 @@ export default function RepoPicker({ layout, target }: Props) {
       const repoFolders: RepoFolder[] = [];
 
       for (const item of items) {
+        // Skip hidden folders (those starting with .)
+        if (item.startsWith('.')) {
+          continue;
+        }
+        
         const fullPath = join(path, item);
         try {
           const stats = await stat(fullPath);
@@ -64,12 +78,12 @@ export default function RepoPicker({ layout, target }: Props) {
             // Check if it's a git repo
             let isGitRepo = false;
             try {
-              await stat(join(fullPath, '.git'));
+              await stat(join(fullPath, ".git"));
               isGitRepo = true;
             } catch {
               // Not a git repo, but still include it
             }
-            
+
             repoFolders.push({
               name: item,
               path: fullPath,
@@ -107,7 +121,7 @@ export default function RepoPicker({ layout, target }: Props) {
   function navigateUp() {
     const parentPath = dirname(currentPath);
     const developerPath = preferences.developerFolder.replace(/^~/, homedir());
-    
+
     // Don't go above the developer folder
     if (parentPath.length >= developerPath.length) {
       setCurrentPath(parentPath);
@@ -132,19 +146,30 @@ export default function RepoPicker({ layout, target }: Props) {
       });
 
       // Close Raycast window first to ensure Ghostty commands don't interfere with Raycast
-      await closeMainWindow({ 
+      await closeMainWindow({
         clearRootSearch: false,
-        popToRootType: PopToRootType.Suspended 
+        popToRootType: PopToRootType.Suspended,
       });
-      
-      // Give time for window transition to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      await launchGhostty(target);
-      
-      // Additional delay to ensure Ghostty is ready
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      // Give time for window transition to complete
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      if (target !== "current") {
+        // Only launch new tab/window if not using current
+        await launchGhostty(target);
+        
+        // Additional delay to ensure Ghostty is ready
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } else {
+        // For current tab, just ensure Ghostty is active
+        await launchGhostty(target);
+        
+        // Shorter delay for current tab
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
+
+
       await createLayoutStructure(layout.structure, repoPath);
 
       showToast({
@@ -152,7 +177,7 @@ export default function RepoPicker({ layout, target }: Props) {
         title: "Layout launched successfully",
         message: layout.name,
       });
-      
+
       pop();
     } catch (error) {
       console.error("Layout launch error:", error);
@@ -167,9 +192,14 @@ export default function RepoPicker({ layout, target }: Props) {
   const developerPath = preferences.developerFolder.replace(/^~/, homedir());
   const canGoUp = currentPath !== developerPath;
 
+  // Temporarily disabled current tab functionality
+  // if (useCurrentTab && currentDirectory) {
+  //   return null;
+  // }
+
   return (
-    <List 
-      isLoading={isLoading} 
+    <List
+      isLoading={isLoading}
       searchBarPlaceholder="Search folders and repositories..."
       navigationTitle={`${layout.name} - ${getRelativePath()}`}
     >
@@ -236,7 +266,7 @@ export default function RepoPicker({ layout, target }: Props) {
           />
         ))}
       </List.Section>
-      
+
       {repos.length === 0 && !isLoading && (
         <List.EmptyView
           title="No folders found"

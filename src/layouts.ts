@@ -42,17 +42,20 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
           ],
         },
         {
-          direction: "vertical", 
+          direction: "vertical",
           panes: [
             { command: "htop" },
-            { command: "log stream --predicate 'eventMessage contains \"error\"' --info" },
+            {
+              command:
+                "log stream --predicate 'eventMessage contains \"error\"' --info",
+            },
           ],
         },
       ],
     },
   },
   {
-    name: "DevOps Control Center", 
+    name: "DevOps Control Center",
     description: "k9s + lazydocker + kubectl + zsh",
     icon: "Cloud",
     structure: {
@@ -86,13 +89,13 @@ export async function getLayouts(): Promise<Layout[]> {
 export async function saveLayout(layout: Layout): Promise<void> {
   const layouts = await getLayouts();
   const existingIndex = layouts.findIndex((l) => l.id === layout.id);
-  
+
   if (existingIndex >= 0) {
     layouts[existingIndex] = layout;
   } else {
     layouts.push(layout);
   }
-  
+
   await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
 }
 
