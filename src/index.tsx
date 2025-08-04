@@ -113,7 +113,7 @@ export default function Command() {
             key={preset.name}
             title={preset.name}
             subtitle={preset.description}
-            icon={Icon.AppWindowGrid3x3}
+            icon={Icon[preset.icon as keyof typeof Icon] || Icon.AppWindowGrid3x3}
             actions={
               <ActionPanel>
                 <Action.Push

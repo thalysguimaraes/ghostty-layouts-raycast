@@ -24,28 +24,6 @@ A Raycast extension for managing and launching Ghostty terminal layouts with pow
 - Live deployment logs
 - Terminal for kubectl commands
 
-**Full Stack Development**
-- Neovim editor (main pane)
-- Frontend development server
-- Backend API server
-- MongoDB shell
-
-**Data Explorer**
-- MySQL CLI with autocomplete
-- Redis CLI
-- SQL query editor
-- Python data analysis environment
-
-**Network Administration**
-- Network routing information
-- Open connections monitoring
-- Network activity with nettop
-- Connectivity testing
-
-**Quick Split**
-- Simple two-pane setup
-- Neovim and terminal
-
 ### 🤖 AI Layout Builder
 
 Describe your desired layout in natural language and let AI create the perfect terminal setup for you.
@@ -78,7 +56,6 @@ Some templates require specific tools to be installed:
 - **htop**: Process monitor (`brew install htop`)
 - **k9s**: Kubernetes TUI (`brew install k9s`)
 - **lazydocker**: Docker TUI (`brew install lazydocker`)
-- **mycli**: MySQL CLI (`brew install mycli`)
 
 ## Customization
 

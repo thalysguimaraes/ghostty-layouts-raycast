@@ -21,5 +21,6 @@ export interface Layout {
 export interface LayoutPreset {
   name: string;
   description: string;
+  icon: string;
   structure: Split;
 }

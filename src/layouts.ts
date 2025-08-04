@@ -6,8 +6,9 @@ const STORAGE_KEY = "ghostty-layouts";
 // Predefined layout templates with great TUI tools
 export const LAYOUT_PRESETS: LayoutPreset[] = [
   {
-    name: "🚀 Developer Workspace",
+    name: "Developer Workspace",
     description: "Neovim (main) | File Manager | Git Status | Terminal",
+    icon: "Code",
     structure: {
       direction: "vertical",
       panes: [
@@ -27,8 +28,9 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
     },
   },
   {
-    name: "📊 System Monitor",
+    name: "System Monitor",
     description: "Resource Monitor | Process List | System Info | Logs",
+    icon: "ComputerChip",
     structure: {
       direction: "horizontal",
       panes: [
@@ -50,8 +52,9 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
     },
   },
   {
-    name: "🐳 DevOps Control Center", 
+    name: "DevOps Control Center", 
     description: "Kubernetes Dashboard | Docker | Logs | Terminal",
+    icon: "Cloud",
     structure: {
       direction: "vertical",
       panes: [
@@ -70,84 +73,6 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
             { command: "zsh" },
           ],
         },
-      ],
-    },
-  },
-  {
-    name: "📝 Full Stack Dev",
-    description: "Editor | Frontend Server | Backend API | Database",
-    structure: {
-      direction: "vertical",
-      panes: [
-        {
-          command: "nvim .",
-          size: 55,
-        },
-        {
-          direction: "horizontal",
-          panes: [
-            { command: "npm run dev", workingDirectory: "./frontend" },
-            { command: "npm run server", workingDirectory: "./backend" }, 
-            { command: "mongosh" }, // MongoDB shell
-          ],
-        },
-      ],
-    },
-  },
-  {
-    name: "🔍 Data Explorer",
-    description: "Database Client | Query Runner | Results | Analytics",
-    structure: {
-      direction: "horizontal",
-      panes: [
-        {
-          direction: "vertical",
-          panes: [
-            { command: "mycli" }, // MySQL CLI with autocomplete
-            { command: "redis-cli" },
-          ],
-        },
-        {
-          direction: "vertical",
-          panes: [
-            { command: "nvim queries.sql" },
-            { command: "python3 -i -c 'import pandas as pd; import numpy as np'" },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    name: "🌐 Network Admin",
-    description: "Network Monitor | Connections | Bandwidth | Activity",
-    structure: {
-      direction: "horizontal",
-      panes: [
-        {
-          direction: "vertical",
-          panes: [
-            { command: "netstat -rn" }, // macOS routing table
-            { command: "lsof -i" }, // Open network connections
-          ],
-        },
-        {
-          direction: "vertical",
-          panes: [
-            { command: "nettop -m route" }, // macOS network top
-            { command: "ping 8.8.8.8" }, // Simple connectivity test
-          ],
-        },
-      ],
-    },
-  },
-  {
-    name: "⚡ Quick Split",
-    description: "Simple vertical split for quick tasks",
-    structure: {
-      direction: "vertical", 
-      panes: [
-        { command: "nvim" },
-        { command: "zsh" },
       ],
     },
   },
