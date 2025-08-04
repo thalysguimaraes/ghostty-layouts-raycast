@@ -12,7 +12,7 @@ import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
 import { GhosttyTarget, launchGhostty, createLayoutStructure } from "./utils";
 import { readdir, stat } from "fs/promises";
-import { join } from "path";
+import { join, basename, dirname } from "path";
 import { homedir } from "os";
 
 interface Props {
@@ -34,20 +34,28 @@ export default function RepoPicker({ layout, target }: Props) {
   const { pop } = useNavigation();
   const [repos, setRepos] = useState<RepoFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPath, setCurrentPath] = useState<string>("");
   const preferences = getPreferenceValues<Preferences>();
 
   useEffect(() => {
-    loadRepos();
+    const developerPath = preferences.developerFolder.replace(/^~/, homedir());
+    setCurrentPath(developerPath);
   }, []);
 
-  async function loadRepos() {
+  useEffect(() => {
+    if (currentPath) {
+      loadRepos(currentPath);
+    }
+  }, [currentPath]);
+
+  async function loadRepos(path: string) {
+    setIsLoading(true);
     try {
-      const developerPath = preferences.developerFolder.replace(/^~/, homedir());
-      const items = await readdir(developerPath);
+      const items = await readdir(path);
       const repoFolders: RepoFolder[] = [];
 
       for (const item of items) {
-        const fullPath = join(developerPath, item);
+        const fullPath = join(path, item);
         try {
           const stats = await stat(fullPath);
           if (stats.isDirectory()) {
@@ -82,12 +90,35 @@ export default function RepoPicker({ layout, target }: Props) {
     } catch (error) {
       showToast({
         style: Toast.Style.Failure,
-        title: "Failed to load repositories",
-        message: `Make sure your developer folder path is correct: ${preferences.developerFolder}`,
+        title: "Failed to load directories",
+        message: `Could not access: ${path}`,
       });
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function navigateToFolder(folderPath: string) {
+    setCurrentPath(folderPath);
+  }
+
+  function navigateUp() {
+    const parentPath = dirname(currentPath);
+    const developerPath = preferences.developerFolder.replace(/^~/, homedir());
+    
+    // Don't go above the developer folder
+    if (parentPath.length >= developerPath.length) {
+      setCurrentPath(parentPath);
+    }
+  }
+
+  function getRelativePath() {
+    const developerPath = preferences.developerFolder.replace(/^~/, homedir());
+    if (currentPath === developerPath) {
+      return "~/Developer";
+    }
+    const relative = currentPath.replace(developerPath, "");
+    return `~/Developer${relative}`;
   }
 
   async function handleLaunchInRepo(repoPath: string) {
@@ -122,9 +153,35 @@ export default function RepoPicker({ layout, target }: Props) {
     }
   }
 
+  const developerPath = preferences.developerFolder.replace(/^~/, homedir());
+  const canGoUp = currentPath !== developerPath;
+
   return (
-    <List isLoading={isLoading} searchBarPlaceholder="Search repositories...">
-      <List.Section title={`Select Repository for ${layout.name}`}>
+    <List 
+      isLoading={isLoading} 
+      searchBarPlaceholder="Search folders and repositories..."
+      navigationTitle={`${layout.name} - ${getRelativePath()}`}
+    >
+      <List.Section title="Navigation">
+        {canGoUp && (
+          <List.Item
+            title=".. (Parent Directory)"
+            subtitle={dirname(currentPath)}
+            icon={Icon.ArrowUp}
+            actions={
+              <ActionPanel>
+                <Action
+                  title="Go Up"
+                  icon={Icon.ArrowUp}
+                  onAction={navigateUp}
+                />
+              </ActionPanel>
+            }
+          />
+        )}
+      </List.Section>
+
+      <List.Section title="Folders & Repositories">
         {repos.map((repo) => (
           <List.Item
             key={repo.path}
@@ -136,11 +193,33 @@ export default function RepoPicker({ layout, target }: Props) {
             ]}
             actions={
               <ActionPanel>
-                <Action
-                  title="Launch Layout Here"
-                  icon={Icon.ArrowRight}
-                  onAction={() => handleLaunchInRepo(repo.path)}
-                />
+                {repo.isGitRepo ? (
+                  <Action
+                    title="Launch Layout Here"
+                    icon={Icon.ArrowRight}
+                    onAction={() => handleLaunchInRepo(repo.path)}
+                  />
+                ) : (
+                  <Action
+                    title="Enter Folder"
+                    icon={Icon.ArrowRight}
+                    onAction={() => navigateToFolder(repo.path)}
+                  />
+                )}
+                {!repo.isGitRepo && (
+                  <Action
+                    title="Launch Layout Here Anyway"
+                    icon={Icon.Terminal}
+                    onAction={() => handleLaunchInRepo(repo.path)}
+                  />
+                )}
+                {repo.isGitRepo && (
+                  <Action
+                    title="Enter Repository Folder"
+                    icon={Icon.Folder}
+                    onAction={() => navigateToFolder(repo.path)}
+                  />
+                )}
               </ActionPanel>
             }
           />
@@ -150,9 +229,16 @@ export default function RepoPicker({ layout, target }: Props) {
       {repos.length === 0 && !isLoading && (
         <List.EmptyView
           title="No folders found"
-          description={`Check your developer folder setting: ${preferences.developerFolder}`}
+          description={`Current path: ${currentPath}`}
           actions={
             <ActionPanel>
+              {canGoUp && (
+                <Action
+                  title="Go Up"
+                  icon={Icon.ArrowUp}
+                  onAction={navigateUp}
+                />
+              )}
               <Action.Open
                 title="Open Raycast Preferences"
                 target="raycast://extensions/thalysguimaraes/ghostty-layouts"
