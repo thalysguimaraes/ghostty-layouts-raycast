@@ -6,19 +6,19 @@ A Raycast extension for managing and launching Ghostty terminal layouts with pow
 
 ### 🚀 Ready-to-Use Templates
 
-**Developer Workspace**
+**Developer Workspace** - `nvim + lf + lazygit + zsh`
 - Neovim editor (main pane)
 - LF file manager
 - LazyGit for version control
 - Terminal for commands
 
-**System Monitor**
+**System Monitor** - `top + htop + df + logs`
 - CPU/memory monitoring with top
 - Disk usage and virtual memory stats
 - htop for process management
 - Live error log streaming
 
-**DevOps Control Center**
+**DevOps Control Center** - `k9s + lazydocker + kubectl + zsh`
 - k9s Kubernetes dashboard
 - LazyDocker container management
 - Live deployment logs

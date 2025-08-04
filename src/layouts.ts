@@ -7,7 +7,7 @@ const STORAGE_KEY = "ghostty-layouts";
 export const LAYOUT_PRESETS: LayoutPreset[] = [
   {
     name: "Developer Workspace",
-    description: "Neovim (main) | File Manager | Git Status | Terminal",
+    description: "nvim + lf + lazygit + zsh",
     icon: "Code",
     structure: {
       direction: "vertical",
@@ -29,7 +29,7 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
   },
   {
     name: "System Monitor",
-    description: "Resource Monitor | Process List | System Info | Logs",
+    description: "top + htop + df + logs",
     icon: "ComputerChip",
     structure: {
       direction: "horizontal",
@@ -53,7 +53,7 @@ export const LAYOUT_PRESETS: LayoutPreset[] = [
   },
   {
     name: "DevOps Control Center", 
-    description: "Kubernetes Dashboard | Docker | Logs | Terminal",
+    description: "k9s + lazydocker + kubectl + zsh",
     icon: "Cloud",
     structure: {
       direction: "vertical",
