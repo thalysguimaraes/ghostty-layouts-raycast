@@ -7,6 +7,8 @@ import {
   Toast,
   getPreferenceValues,
   useNavigation,
+  closeMainWindow,
+  PopToRootType,
 } from "@raycast/api";
 import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
@@ -128,6 +130,15 @@ export default function RepoPicker({ layout, target }: Props) {
         title: "Launching layout...",
         message: `${layout.name} in ${repoPath}`,
       });
+
+      // Close Raycast window first to ensure Ghostty commands don't interfere with Raycast
+      await closeMainWindow({ 
+        clearRootSearch: false,
+        popToRootType: PopToRootType.Suspended 
+      });
+      
+      // Give time for window transition to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       await launchGhostty(target);
       
