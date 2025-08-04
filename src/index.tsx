@@ -1,10 +1,10 @@
 import { ActionPanel, Action, List, Icon, showToast, Toast } from "@raycast/api";
 import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
-import { getLayouts, deleteLayout } from "./layouts";
-import CreateLayout from "./create-layout";
+import { getLayouts, deleteLayout, LAYOUT_PRESETS, saveLayout } from "./layouts";
 import LaunchLayout from "./launch-layout";
 import AIBuilder from "./ai-builder";
+import { v4 as uuidv4 } from "uuid";
 
 export default function Command() {
   const [layouts, setLayouts] = useState<Layout[]>([]);
@@ -47,6 +47,33 @@ export default function Command() {
     }
   }
 
+  async function handleUseTemplate(templateName: string, customName?: string) {
+    try {
+      const preset = LAYOUT_PRESETS.find((p) => p.name === templateName);
+      if (!preset) return;
+
+      const layout: Layout = {
+        id: uuidv4(),
+        name: customName || preset.name,
+        description: preset.description,
+        structure: preset.structure,
+      };
+
+      await saveLayout(layout);
+      await loadLayouts();
+      
+      showToast({
+        style: Toast.Style.Success,
+        title: "Template added to your layouts",
+      });
+    } catch (error) {
+      showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to add template",
+      });
+    }
+  }
+
   return (
     <List isLoading={isLoading}>
       <List.Section title="Custom Layouts">
@@ -66,11 +93,7 @@ export default function Command() {
                   icon={Icon.ArrowRight}
                   target={<LaunchLayout layout={layout} />}
                 />
-                <Action.Push
-                  title="Edit Layout"
-                  icon={Icon.Pencil}
-                  target={<CreateLayout layout={layout} onSave={loadLayouts} />}
-                />
+
 
                 <Action
                   title="Delete Layout"
@@ -84,20 +107,37 @@ export default function Command() {
         ))}
       </List.Section>
       
-      <List.Section title="Actions">
-        <List.Item
-          title="Create New Layout"
-          subtitle="Quick form-based creation"
-          icon={Icon.Plus}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                title="Create Layout"
-                target={<CreateLayout onSave={loadLayouts} />}
-              />
-            </ActionPanel>
-          }
-        />
+      <List.Section title="Ready-to-Use Templates">
+        {LAYOUT_PRESETS.map((preset) => (
+          <List.Item
+            key={preset.name}
+            title={preset.name}
+            subtitle={preset.description}
+            icon={Icon.AppWindowGrid3x3}
+            actions={
+              <ActionPanel>
+                <Action.Push
+                  title="Launch Template"
+                  icon={Icon.ArrowRight}
+                  target={<LaunchLayout layout={{
+                    id: 'temp-' + preset.name,
+                    name: preset.name,
+                    description: preset.description,
+                    structure: preset.structure
+                  }} />}
+                />
+                <Action
+                  title="Add to My Layouts"
+                  icon={Icon.Plus}
+                  onAction={() => handleUseTemplate(preset.name)}
+                />
+              </ActionPanel>
+            }
+          />
+        ))}
+      </List.Section>
+      
+      <List.Section title="Create New Layout">
         <List.Item
           title="AI Layout Builder"
           subtitle="Describe your layout in natural language"
