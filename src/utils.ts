@@ -1,8 +1,18 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import { Split, Pane } from "./types";
+import { AdaptiveDelay, ContextualDelay } from "./services/adaptive-delay";
+import {
+  withRetry,
+  withTimeout,
+  ScriptExecutionError,
+  TimeoutError,
+  createErrorHandler,
+} from "./services/error-handler";
 
 const execAsync = promisify(exec);
+const adaptiveDelay = new ContextualDelay(200, 100, 1000);
+const handleError = createErrorHandler('Ghostty Utils');
 
 export type GhosttyTarget = "current" | "new-tab" | "new-window";
 
@@ -13,7 +23,11 @@ export interface GhosttyTabInfo {
 
 export async function isGhosttyRunning(): Promise<boolean> {
   try {
-    const result = await execAsync('pgrep -f "Ghostty"');
+    const result = await withTimeout(
+      execAsync('pgrep -f "Ghostty"'),
+      3000,
+      'Timeout checking if Ghostty is running'
+    );
     return result.stdout.trim().length > 0;
   } catch (error) {
     return false;
@@ -182,22 +196,25 @@ export async function launchGhostty(target: GhosttyTarget = "new-window") {
       await execAsync(
         'osascript -e "tell application \\"Ghostty\\" to activate"',
       );
-      await delay(300);
+      await adaptiveDelay.wait('activation');
+      adaptiveDelay.recordSuccess('activation');
     } else if (target === "new-tab" && isRunning) {
       // Create a new tab
       await execAsync(
         'osascript -e "tell application \\"Ghostty\\" to activate"',
       );
-      await delay(300);
+      await adaptiveDelay.wait('activation');
+      adaptiveDelay.recordSuccess('activation');
       // Ensure we're targeting Ghostty process specifically
       // First ensure Ghostty is truly frontmost
       await ensureGhosttyFrontmost();
-      await delay(200);
+      await adaptiveDelay.wait('frontmost');
       // Then send the new tab command
       await execAsync(
         'osascript -e "tell application \\"System Events\\" to tell process \\"Ghostty\\" to keystroke \\"t\\" using {command down}"',
       );
-      await delay(500);
+      await adaptiveDelay.wait('new-tab');
+      adaptiveDelay.recordSuccess('new-tab');
     } else {
       // Open new window or launch Ghostty if not running
       if (isRunning) {
@@ -205,16 +222,19 @@ export async function launchGhostty(target: GhosttyTarget = "new-window") {
         await execAsync(
           'osascript -e "tell application \\"Ghostty\\" to activate"',
         );
-        await delay(300);
+        await adaptiveDelay.wait('activation');
+        adaptiveDelay.recordSuccess('activation');
         // Command+Shift+N for new window in Ghostty
         await execAsync(
           'osascript -e "tell application \\"System Events\\" to tell process \\"Ghostty\\" to keystroke \\"n\\" using {command down, shift down}"',
         );
-        await delay(500);
+        await adaptiveDelay.wait('new-window');
+        adaptiveDelay.recordSuccess('new-window');
       } else {
         // Ghostty is not running, launch it
         await execAsync("open -a Ghostty");
-        await delay(1000);
+        await adaptiveDelay.wait('launch');
+        adaptiveDelay.recordSuccess('launch');
       }
     }
 
@@ -254,12 +274,25 @@ export async function createSplit(direction: "vertical" | "horizontal") {
       direction === "horizontal" ? "shift down, command down" : "command down";
     const script = `osascript -e 'tell application "Ghostty" to activate' -e 'tell application "System Events" to tell process "Ghostty" to keystroke "d" using {${modifier}}'`;
     console.log("Executing script:", script);
-    const result = await execAsync(script);
+    
+    const result = await withRetry(
+      () => withTimeout(execAsync(script), 5000, 'Split creation timed out'),
+      {
+        maxRetries: 2,
+        retryDelay: 500,
+        onRetry: (error, count) => {
+          console.log(`Retrying split creation (attempt ${count})...`);
+          adaptiveDelay.recordFailure('split');
+        }
+      }
+    );
+    
     console.log("Split result:", result);
-    await delay(200); // Reduced delay for faster split creation
+    await adaptiveDelay.wait('split');
+    adaptiveDelay.recordSuccess('split');
   } catch (error) {
     console.error("Failed to create split:", error);
-    throw error;
+    throw new ScriptExecutionError('Failed to create split', error, undefined, 2);
   }
 }
 
@@ -279,7 +312,8 @@ export async function navigateToPane(
   await execAsync(
     `osascript -e 'tell application "Ghostty" to activate' -e 'tell application "System Events" to tell process "Ghostty" to key code ${keyCodes[direction]} using command down'`,
   );
-  await delay(100); // Reduced delay
+  await adaptiveDelay.wait('navigate');
+  adaptiveDelay.recordSuccess('navigate');
 }
 
 export async function runCommand(command: string, workingDirectory?: string) {
@@ -311,12 +345,33 @@ export async function runCommand(command: string, workingDirectory?: string) {
     // Send the command
     const script = `osascript -e 'tell application "Ghostty" to activate' -e 'delay 0.2' -e 'tell application "System Events" to tell process "Ghostty" to keystroke "${escapedCommand}"' -e 'delay 0.1' -e 'tell application "System Events" to tell process "Ghostty" to key code 36'`;
     console.log("Executing command script:", script);
-    const result = await execAsync(script);
+    
+    const result = await withRetry(
+      () => withTimeout(execAsync(script), 10000, 'Command execution timed out'),
+      {
+        maxRetries: 2,
+        retryDelay: 1000,
+        onRetry: (error, count) => {
+          console.log(`Retrying command execution (attempt ${count})...`);
+          adaptiveDelay.recordFailure('command');
+        },
+        shouldRetry: (error) => {
+          // Don't retry if it's a timeout error with a long-running command
+          if (error instanceof TimeoutError && command.includes('npm install')) {
+            return false;
+          }
+          return true;
+        }
+      }
+    );
+    
     console.log("Command result:", result);
-    await delay(300);
+    await adaptiveDelay.wait('command');
+    adaptiveDelay.recordSuccess('command');
   } catch (error) {
-    console.error("Failed to run command:", error);
-    throw error;
+    const errorHandler = handleError(error);
+    console.error("Failed to run command:", errorHandler);
+    throw new ScriptExecutionError(`Failed to run command: ${command}`, error, undefined, 2);
   }
 }
 
@@ -327,7 +382,8 @@ export async function createLayoutStructure(
 ): Promise<void> {
   // Ensure Ghostty is frontmost before starting
   await ensureGhosttyFrontmost();
-  await delay(200);
+  await adaptiveDelay.wait('structure-start');
+  adaptiveDelay.recordSuccess('structure-start');
 
   if ("command" in structure) {
     // It's a pane
@@ -335,7 +391,8 @@ export async function createLayoutStructure(
       structure.command,
       structure.workingDirectory || rootDirectory,
     );
-    await delay(200);
+    await adaptiveDelay.wait('pane-command');
+    adaptiveDelay.recordSuccess('pane-command');
   } else {
     // It's a split
     const { direction, panes } = structure;
@@ -383,7 +440,8 @@ async function ensureGhosttyFrontmost(): Promise<void> {
     await execAsync(
       'osascript -e "tell application \\"Ghostty\\" to activate"',
     );
-    await delay(200);
+    await adaptiveDelay.wait('frontmost');
+    adaptiveDelay.recordSuccess('frontmost');
 
     // Double-check that Ghostty is frontmost
     const frontmostApp = await execAsync(
@@ -398,7 +456,8 @@ async function ensureGhosttyFrontmost(): Promise<void> {
       await execAsync(
         'osascript -e "tell application \\"Ghostty\\" to activate"',
       );
-      await delay(300);
+      await adaptiveDelay.wait('retry-frontmost');
+      adaptiveDelay.recordSuccess('retry-frontmost');
     }
   } catch (error) {
     console.error("Failed to ensure Ghostty is frontmost:", error);
@@ -407,4 +466,8 @@ async function ensureGhosttyFrontmost(): Promise<void> {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function resetDelays(): void {
+  adaptiveDelay.resetAll();
 }
