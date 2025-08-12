@@ -5,7 +5,6 @@ import {
   Icon,
   showToast,
   Toast,
-  LocalStorage,
 } from "@raycast/api";
 import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
@@ -101,7 +100,7 @@ export default function Command() {
           />
         </List.Section>
       )}
-      
+
       <List.Section title="My Custom Layouts">
         {layouts.map((layout) => (
           <List.Item
@@ -136,8 +135,8 @@ export default function Command() {
         ))}
       </List.Section>
 
-      <List.Section 
-        title="Ready-to-Use Templates" 
+      <List.Section
+        title="Ready-to-Use Templates"
         subtitle="Templates have their own commands - assign keyboard shortcuts in Raycast Settings"
       >
         {LAYOUT_PRESETS.map((preset) => (

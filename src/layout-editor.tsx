@@ -80,7 +80,7 @@ export default function LayoutEditor({ layout, onSave }: Props) {
     }
   }
 
-  function validateStructure(structure: any): asserts structure is Split {
+  function validateStructure(structure: unknown): asserts structure is Split {
     if (!structure || typeof structure !== "object") {
       throw new Error("Structure must be an object");
     }
@@ -103,7 +103,7 @@ export default function LayoutEditor({ layout, onSave }: Props) {
     }
 
     // Recursively validate panes
-    structure.panes.forEach((pane: any, index: number) => {
+    structure.panes.forEach((pane: unknown, index: number) => {
       try {
         validatePane(pane);
       } catch (error) {
@@ -114,7 +114,7 @@ export default function LayoutEditor({ layout, onSave }: Props) {
     });
   }
 
-  function validatePane(pane: any): asserts pane is Pane | Split {
+  function validatePane(pane: unknown): asserts pane is Pane | Split {
     if (!pane || typeof pane !== "object") {
       throw new Error("Pane must be an object");
     }
@@ -124,12 +124,17 @@ export default function LayoutEditor({ layout, onSave }: Props) {
       if (typeof pane.command !== "string" || !pane.command.trim()) {
         throw new Error("Pane must have a non-empty command string");
       }
-      if (pane.workingDirectory && typeof pane.workingDirectory !== "string") {
+      if (
+        (pane as Pane).workingDirectory &&
+        typeof (pane as Pane).workingDirectory !== "string"
+      ) {
         throw new Error("workingDirectory must be a string");
       }
       if (
-        pane.size &&
-        (typeof pane.size !== "number" || pane.size <= 0 || pane.size > 100)
+        (pane as Pane).size &&
+        (typeof (pane as Pane).size !== "number" ||
+          (pane as Pane).size! <= 0 ||
+          (pane as Pane).size! > 100)
       ) {
         throw new Error("size must be a number between 1 and 100");
       }
@@ -142,7 +147,7 @@ export default function LayoutEditor({ layout, onSave }: Props) {
         throw new Error("panes must be a non-empty array");
       }
       // Recursively validate nested panes
-      pane.panes.forEach((nestedPane: any, index: number) => {
+      pane.panes.forEach((nestedPane: unknown, index: number) => {
         try {
           validatePane(nestedPane);
         } catch (error) {

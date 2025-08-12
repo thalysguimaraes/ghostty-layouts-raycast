@@ -9,7 +9,7 @@ import {
   getPreferenceValues,
 } from "@raycast/api";
 import React, { useState } from "react";
-import { Layout, Split } from "./types";
+import { Layout, Split, Pane } from "./types";
 import { saveLayout } from "./layouts";
 import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
@@ -49,7 +49,7 @@ export default function AIBuilderForm({ onSave }: Props) {
     }
 
     setIsGenerating(true);
-    
+
     try {
       const openai = new OpenAI({
         apiKey: preferences.openaiApiKey,
@@ -112,12 +112,13 @@ Respond with JSON only:`;
         messages: [
           {
             role: "system",
-            content: "You are a terminal layout expert. Respond with valid JSON only, no explanations or markdown formatting."
+            content:
+              "You are a terminal layout expert. Respond with valid JSON only, no explanations or markdown formatting.",
           },
           {
             role: "user",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         temperature: 0.3,
         max_tokens: 1000,
@@ -132,7 +133,7 @@ Respond with JSON only:`;
 
       // Parse the JSON response
       const aiLayout = JSON.parse(response.trim());
-      
+
       const layout: Layout = {
         id: uuidv4(),
         name: layoutName.trim() || aiLayout.name || "AI Generated Layout",
@@ -141,13 +142,12 @@ Respond with JSON only:`;
       };
 
       setGeneratedLayout(layout);
-      
+
       showToast({
         style: Toast.Style.Success,
         title: "Layout generated successfully!",
         message: "Review and save your layout",
       });
-
     } catch (error) {
       console.error("AI generation error:", error);
       showToast({
@@ -165,7 +165,7 @@ Respond with JSON only:`;
 
     try {
       await saveLayout(generatedLayout);
-      
+
       showToast({
         style: Toast.Style.Success,
         title: "Layout saved successfully",
@@ -182,11 +182,13 @@ Respond with JSON only:`;
     }
   }
 
-  function renderLayoutPreview(structure: Split | any, depth = 0): string {
-    if (structure.command) {
+  function renderLayoutPreview(structure: Split | Pane, depth = 0): string {
+    if ("command" in structure) {
       // It's a pane
       const indent = "  ".repeat(depth);
-      const workingDir = structure.workingDirectory ? ` (${structure.workingDirectory})` : "";
+      const workingDir = structure.workingDirectory
+        ? ` (${structure.workingDirectory})`
+        : "";
       const size = structure.size ? ` [${structure.size}%]` : "";
       return `${indent}📟 \`${structure.command}\`${workingDir}${size}`;
     } else {
@@ -194,17 +196,18 @@ Respond with JSON only:`;
       const { direction, panes } = structure;
       const indent = "  ".repeat(depth);
       const directionIcon = direction === "vertical" ? "↔️" : "↕️";
-      const directionText = direction === "vertical" ? "Vertical Split" : "Horizontal Split";
-      
+      const directionText =
+        direction === "vertical" ? "Vertical Split" : "Horizontal Split";
+
       let result = `${indent}${directionIcon} **${directionText}**\n`;
-      
-      panes.forEach((pane: any, index: number) => {
+
+      panes.forEach((pane: Split | Pane, index: number) => {
         result += renderLayoutPreview(pane, depth + 1);
         if (index < panes.length - 1) {
           result += "\n";
         }
       });
-      
+
       return result;
     }
   }
@@ -256,7 +259,6 @@ Respond with JSON only:`;
         onChange={setDescription}
       />
 
-
       {generatedLayout && (
         <>
           <Form.Separator />
@@ -274,7 +276,7 @@ Respond with JSON only:`;
 • "Three column layout: editor, terminal, and logs"
 • "Full stack setup with frontend dev server, backend API, and database console"`}
       />
-      
+
       {!preferences.openaiApiKey && (
         <Form.Description
           title="⚠️ API Key Required"

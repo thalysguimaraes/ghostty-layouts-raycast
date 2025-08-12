@@ -1,11 +1,6 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { 
-  ScriptExecutionError, 
-  TimeoutError,
-  withTimeout,
-  withRetry,
-} from './error-handler';
+import { exec } from "child_process";
+import { promisify } from "util";
+import { ScriptExecutionError, withTimeout, withRetry } from "./error-handler";
 
 const execAsync = promisify(exec);
 
@@ -24,7 +19,7 @@ export interface ScriptResult {
 }
 
 export class AppleScriptQueue {
-  private queue: Promise<any> = Promise.resolve();
+  private queue: Promise<ScriptResult> = Promise.resolve({} as ScriptResult);
   private pendingScripts: QueuedScript[] = [];
   private isProcessing: boolean = false;
   private abortController?: AbortController;
@@ -33,17 +28,14 @@ export class AppleScriptQueue {
   private defaultTimeout: number = 5000;
   private defaultRetries: number = 2;
 
-  constructor(
-    defaultTimeout: number = 5000,
-    defaultRetries: number = 2
-  ) {
+  constructor(defaultTimeout: number = 5000, defaultRetries: number = 2) {
     this.defaultTimeout = defaultTimeout;
     this.defaultRetries = defaultRetries;
   }
 
   async execute(
-    script: string, 
-    options: Partial<QueuedScript> = {}
+    script: string,
+    options: Partial<QueuedScript> = {},
   ): Promise<ScriptResult> {
     const scriptId = options.id || this.generateId();
     const queuedScript: QueuedScript = {
@@ -67,7 +59,7 @@ export class AppleScriptQueue {
 
   async executePriority(
     script: string,
-    priority: number = 10
+    priority: number = 10,
   ): Promise<ScriptResult> {
     return this.execute(script, { priority });
   }
@@ -75,51 +67,54 @@ export class AppleScriptQueue {
   async executeImmediate(script: string): Promise<ScriptResult> {
     // Bypass queue for urgent scripts
     const startTime = Date.now();
-    
+
     try {
       const result = await withTimeout(
         execAsync(script),
         this.defaultTimeout,
-        `Script execution timed out: ${script.substring(0, 50)}...`
+        `Script execution timed out: ${script.substring(0, 50)}...`,
       );
-      
+
       const executionTime = Date.now() - startTime;
       const scriptResult: ScriptResult = {
         stdout: result.stdout,
         stderr: result.stderr,
         executionTime,
       };
-      
+
       this.cacheResult(script, scriptResult);
       return scriptResult;
     } catch (error) {
       throw new ScriptExecutionError(
-        'Immediate script execution failed',
+        "Immediate script execution failed",
         error,
-        script
+        script,
       );
     }
   }
 
-  private async executeScript(queuedScript: QueuedScript): Promise<ScriptResult> {
+  private async executeScript(
+    queuedScript: QueuedScript,
+  ): Promise<ScriptResult> {
     const startTime = Date.now();
     this.isProcessing = true;
 
     try {
       const result = await withRetry(
-        () => withTimeout(
-          execAsync(queuedScript.script),
-          queuedScript.timeout || this.defaultTimeout,
-          `Script timed out after ${queuedScript.timeout}ms`
-        ),
+        () =>
+          withTimeout(
+            execAsync(queuedScript.script),
+            queuedScript.timeout || this.defaultTimeout,
+            `Script timed out after ${queuedScript.timeout}ms`,
+          ),
         {
           maxRetries: queuedScript.retries || this.defaultRetries,
           retryDelay: 500,
           exponentialBackoff: true,
-          onRetry: (error, count) => {
-            console.log(`Retrying script (attempt ${count}): ${queuedScript.id}`);
+          onRetry: () => {
+            // Retrying script attempt
           },
-        }
+        },
       );
 
       const executionTime = Date.now() - startTime;
@@ -136,7 +131,7 @@ export class AppleScriptQueue {
         `Failed to execute script: ${queuedScript.id}`,
         error,
         queuedScript.script,
-        queuedScript.retries
+        queuedScript.retries,
       );
     } finally {
       this.isProcessing = false;
@@ -144,16 +139,16 @@ export class AppleScriptQueue {
   }
 
   async executeParallel(scripts: string[]): Promise<ScriptResult[]> {
-    const promises = scripts.map((script, index) => 
-      this.execute(script, { priority: index })
+    const promises = scripts.map((script, index) =>
+      this.execute(script, { priority: index }),
     );
-    
+
     return Promise.all(promises);
   }
 
   async executeBatch(
     scripts: string[],
-    options: { sequential?: boolean; stopOnError?: boolean } = {}
+    options: { sequential?: boolean; stopOnError?: boolean } = {},
   ): Promise<ScriptResult[]> {
     const { sequential = false, stopOnError = false } = options;
     const results: ScriptResult[] = [];
@@ -169,7 +164,7 @@ export class AppleScriptQueue {
           }
           // Continue with error result
           results.push({
-            stdout: '',
+            stdout: "",
             stderr: error instanceof Error ? error.message : String(error),
             executionTime: 0,
           });
@@ -190,7 +185,7 @@ export class AppleScriptQueue {
   }
 
   clear(): void {
-    this.queue = Promise.resolve();
+    this.queue = Promise.resolve({} as ScriptResult);
     this.pendingScripts = [];
     this.isProcessing = false;
     this.abort();
@@ -204,9 +199,11 @@ export class AppleScriptQueue {
     // Maintain cache size limit
     if (this.scriptHistory.size >= this.maxHistorySize) {
       const firstKey = this.scriptHistory.keys().next().value;
-      this.scriptHistory.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.scriptHistory.delete(firstKey);
+      }
     }
-    
+
     this.scriptHistory.set(script, {
       ...result,
       executionTime: Date.now(), // Use as timestamp for cache validity
@@ -260,18 +257,20 @@ export function resetGlobalQueue(): void {
 // Convenience functions
 export async function executeScript(
   script: string,
-  options?: Partial<QueuedScript>
+  options?: Partial<QueuedScript>,
 ): Promise<ScriptResult> {
   return getGlobalQueue().execute(script, options);
 }
 
-export async function executeScriptImmediate(script: string): Promise<ScriptResult> {
+export async function executeScriptImmediate(
+  script: string,
+): Promise<ScriptResult> {
   return getGlobalQueue().executeImmediate(script);
 }
 
 export async function executeScriptBatch(
   scripts: string[],
-  options?: { sequential?: boolean; stopOnError?: boolean }
+  options?: { sequential?: boolean; stopOnError?: boolean },
 ): Promise<ScriptResult[]> {
   return getGlobalQueue().executeBatch(scripts, options);
 }

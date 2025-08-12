@@ -25,7 +25,7 @@ A powerful Raycast extension that brings terminal layout management to [Ghostty]
 ## Installation
 
 1. Install [Ghostty](https://ghostty.org/) terminal emulator
-2. Install this extension from the Raycast Store (coming soon) or build from source
+2. Install this extension from the Raycast Store or build from source
 3. Configure your preferences in Raycast Settings
 
 ## Configuration

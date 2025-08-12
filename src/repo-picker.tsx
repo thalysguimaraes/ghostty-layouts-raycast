@@ -14,7 +14,7 @@ import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
 import { GhosttyTarget, launchGhostty, createLayoutStructure } from "./utils";
 import { readdir, stat } from "fs/promises";
-import { join, basename, dirname } from "path";
+import { join, dirname } from "path";
 import { homedir } from "os";
 
 interface Props {
@@ -34,7 +34,7 @@ interface Preferences {
   developerFolder: string;
 }
 
-export default function RepoPicker({ layout, target, useCurrentTab, currentDirectory }: Props) {
+export default function RepoPicker({ layout, target }: Props) {
   const { pop } = useNavigation();
   const [repos, setRepos] = useState<RepoFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,10 +67,10 @@ export default function RepoPicker({ layout, target, useCurrentTab, currentDirec
 
       for (const item of items) {
         // Skip hidden folders (those starting with .)
-        if (item.startsWith('.')) {
+        if (item.startsWith(".")) {
           continue;
         }
-        
+
         const fullPath = join(path, item);
         try {
           const stats = await stat(fullPath);
@@ -157,18 +157,16 @@ export default function RepoPicker({ layout, target, useCurrentTab, currentDirec
       if (target !== "current") {
         // Only launch new tab/window if not using current
         await launchGhostty(target);
-        
+
         // Additional delay to ensure Ghostty is ready
         await new Promise((resolve) => setTimeout(resolve, 1000));
       } else {
         // For current tab, just ensure Ghostty is active
         await launchGhostty(target);
-        
+
         // Shorter delay for current tab
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
-
-
 
       await createLayoutStructure(layout.structure, repoPath);
 

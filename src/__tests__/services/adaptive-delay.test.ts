@@ -1,6 +1,6 @@
-import { AdaptiveDelay, ContextualDelay } from '../../services/adaptive-delay';
+import { AdaptiveDelay, ContextualDelay } from "../../services/adaptive-delay";
 
-describe('AdaptiveDelay', () => {
+describe("AdaptiveDelay", () => {
   let adaptiveDelay: AdaptiveDelay;
 
   beforeEach(() => {
@@ -12,20 +12,20 @@ describe('AdaptiveDelay', () => {
     jest.useRealTimers();
   });
 
-  describe('wait()', () => {
-    it('should wait for the base delay initially', async () => {
+  describe("wait()", () => {
+    it("should wait for the base delay initially", async () => {
       const waitPromise = adaptiveDelay.wait();
-      
+
       jest.advanceTimersByTime(99);
       expect(jest.getTimerCount()).toBe(1);
-      
+
       jest.advanceTimersByTime(1);
       await waitPromise;
-      
+
       expect(jest.getTimerCount()).toBe(0);
     });
 
-    it('should track delay history', async () => {
+    it("should track delay history", async () => {
       const waitPromise1 = adaptiveDelay.wait();
       jest.runAllTimers();
       await waitPromise1;
@@ -38,8 +38,8 @@ describe('AdaptiveDelay', () => {
     });
   });
 
-  describe('recordSuccess()', () => {
-    it('should decrease delay after multiple successes', async () => {
+  describe("recordSuccess()", () => {
+    it("should decrease delay after multiple successes", async () => {
       adaptiveDelay.recordSuccess();
       adaptiveDelay.recordSuccess();
       adaptiveDelay.recordSuccess();
@@ -49,7 +49,7 @@ describe('AdaptiveDelay', () => {
       expect(stats.successCount).toBe(3);
     });
 
-    it('should not decrease below minimum delay', async () => {
+    it("should not decrease below minimum delay", async () => {
       for (let i = 0; i < 10; i++) {
         adaptiveDelay.recordSuccess();
       }
@@ -59,8 +59,8 @@ describe('AdaptiveDelay', () => {
     });
   });
 
-  describe('recordFailure()', () => {
-    it('should increase delay after failures', () => {
+  describe("recordFailure()", () => {
+    it("should increase delay after failures", () => {
       adaptiveDelay.recordFailure();
       adaptiveDelay.recordFailure();
 
@@ -69,7 +69,7 @@ describe('AdaptiveDelay', () => {
       expect(stats.failureCount).toBe(2);
     });
 
-    it('should not increase above maximum delay', () => {
+    it("should not increase above maximum delay", () => {
       for (let i = 0; i < 10; i++) {
         adaptiveDelay.recordFailure();
       }
@@ -79,8 +79,8 @@ describe('AdaptiveDelay', () => {
     });
   });
 
-  describe('reset()', () => {
-    it('should reset all counters and delay to initial values', () => {
+  describe("reset()", () => {
+    it("should reset all counters and delay to initial values", () => {
       adaptiveDelay.recordSuccess();
       adaptiveDelay.recordSuccess();
       adaptiveDelay.recordFailure();
@@ -96,7 +96,7 @@ describe('AdaptiveDelay', () => {
   });
 });
 
-describe('ContextualDelay', () => {
+describe("ContextualDelay", () => {
   let contextualDelay: ContextualDelay;
 
   beforeEach(() => {
@@ -108,17 +108,17 @@ describe('ContextualDelay', () => {
     jest.useRealTimers();
   });
 
-  describe('wait() with context', () => {
-    it('should maintain separate delays for different contexts', async () => {
-      contextualDelay.recordSuccess('context1');
-      contextualDelay.recordSuccess('context1');
-      contextualDelay.recordSuccess('context1');
+  describe("wait() with context", () => {
+    it("should maintain separate delays for different contexts", async () => {
+      contextualDelay.recordSuccess("context1");
+      contextualDelay.recordSuccess("context1");
+      contextualDelay.recordSuccess("context1");
 
-      contextualDelay.recordFailure('context2');
-      contextualDelay.recordFailure('context2');
+      contextualDelay.recordFailure("context2");
+      contextualDelay.recordFailure("context2");
 
-      const waitPromise1 = contextualDelay.wait('context1');
-      const waitPromise2 = contextualDelay.wait('context2');
+      const waitPromise1 = contextualDelay.wait("context1");
+      const waitPromise2 = contextualDelay.wait("context2");
 
       jest.runAllTimers();
       await Promise.all([waitPromise1, waitPromise2]);
@@ -129,19 +129,19 @@ describe('ContextualDelay', () => {
     });
   });
 
-  describe('resetContext()', () => {
-    it('should reset only the specified context', async () => {
+  describe("resetContext()", () => {
+    it("should reset only the specified context", async () => {
       // Create contexts by using them with fake timers
-      const waitPromise1 = contextualDelay.wait('context1');
-      const waitPromise2 = contextualDelay.wait('context2');
-      
+      const waitPromise1 = contextualDelay.wait("context1");
+      const waitPromise2 = contextualDelay.wait("context2");
+
       jest.runAllTimers();
       await Promise.all([waitPromise1, waitPromise2]);
-      
-      contextualDelay.recordSuccess('context1');
-      contextualDelay.recordSuccess('context2');
 
-      contextualDelay.resetContext('context1');
+      contextualDelay.recordSuccess("context1");
+      contextualDelay.recordSuccess("context2");
+
+      contextualDelay.resetContext("context1");
 
       // Context1 should be reset, context2 should maintain its state
       // The base stats don't track context-specific counts
@@ -151,10 +151,10 @@ describe('ContextualDelay', () => {
     });
   });
 
-  describe('resetAll()', () => {
-    it('should reset all contexts and base delay', () => {
-      contextualDelay.recordSuccess('context1');
-      contextualDelay.recordSuccess('context2');
+  describe("resetAll()", () => {
+    it("should reset all contexts and base delay", () => {
+      contextualDelay.recordSuccess("context1");
+      contextualDelay.recordSuccess("context2");
       contextualDelay.recordSuccess();
 
       contextualDelay.resetAll();

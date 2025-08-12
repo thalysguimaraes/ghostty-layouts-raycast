@@ -11,7 +11,7 @@ export class AdaptiveDelay {
   constructor(
     baseDelay: number = 100,
     minDelay: number = 50,
-    maxDelay: number = 1000
+    maxDelay: number = 1000,
   ) {
     this.baseDelay = baseDelay;
     this.minDelay = minDelay;
@@ -21,7 +21,7 @@ export class AdaptiveDelay {
 
   async wait(): Promise<void> {
     const delay = this.getCurrentDelay();
-    await new Promise(resolve => setTimeout(resolve, delay));
+    await new Promise((resolve) => setTimeout(resolve, delay));
     this.delayHistory.push(delay);
     if (this.delayHistory.length > this.maxHistorySize) {
       this.delayHistory.shift();
@@ -42,15 +42,9 @@ export class AdaptiveDelay {
 
   private adjustDelay(): void {
     if (this.successCount >= 3) {
-      this.currentDelay = Math.max(
-        this.minDelay,
-        this.currentDelay * 0.8
-      );
+      this.currentDelay = Math.max(this.minDelay, this.currentDelay * 0.8);
     } else if (this.failureCount >= 2) {
-      this.currentDelay = Math.min(
-        this.maxDelay,
-        this.currentDelay * 1.5
-      );
+      this.currentDelay = Math.min(this.maxDelay, this.currentDelay * 1.5);
     }
 
     if (this.successCount >= 5) {
@@ -102,11 +96,10 @@ export class ContextualDelay extends AdaptiveDelay {
     }
 
     if (!this.contextMap.has(context)) {
-      this.contextMap.set(context, new AdaptiveDelay(
-        this.baseDelay,
-        this.minDelay,
-        this.maxDelay
-      ));
+      this.contextMap.set(
+        context,
+        new AdaptiveDelay(this.baseDelay, this.minDelay, this.maxDelay),
+      );
     }
 
     const contextDelay = this.contextMap.get(context)!;
@@ -144,7 +137,7 @@ export class ContextualDelay extends AdaptiveDelay {
 
   resetAll(): void {
     super.reset();
-    this.contextMap.forEach(delay => delay.reset());
+    this.contextMap.forEach((delay) => delay.reset());
     this.contextMap.clear();
   }
 }

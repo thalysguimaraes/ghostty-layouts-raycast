@@ -3,17 +3,20 @@ export class ScriptExecutionError extends Error {
     message: string,
     public readonly originalError?: unknown,
     public readonly script?: string,
-    public readonly retryCount?: number
+    public readonly retryCount?: number,
   ) {
     super(message);
-    this.name = 'ScriptExecutionError';
+    this.name = "ScriptExecutionError";
   }
 }
 
 export class TimeoutError extends Error {
-  constructor(message: string, public readonly timeoutMs: number) {
+  constructor(
+    message: string,
+    public readonly timeoutMs: number,
+  ) {
     super(message);
-    this.name = 'TimeoutError';
+    this.name = "TimeoutError";
   }
 }
 
@@ -27,7 +30,7 @@ export interface RetryOptions {
 
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  options: RetryOptions = {}
+  options: RetryOptions = {},
 ): Promise<T> {
   const {
     maxRetries = 3,
@@ -57,7 +60,7 @@ export async function withRetry<T>(
         ? retryDelay * Math.pow(2, attempt)
         : retryDelay;
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
@@ -67,16 +70,18 @@ export async function withRetry<T>(
 export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<T> {
   let timeoutHandle: NodeJS.Timeout;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutHandle = setTimeout(() => {
-      reject(new TimeoutError(
-        errorMessage || `Operation timed out after ${timeoutMs}ms`,
-        timeoutMs
-      ));
+      reject(
+        new TimeoutError(
+          errorMessage || `Operation timed out after ${timeoutMs}ms`,
+          timeoutMs,
+        ),
+      );
     }, timeoutMs);
   });
 
@@ -99,7 +104,7 @@ export interface CircuitBreakerOptions {
 export class CircuitBreaker {
   private failures = 0;
   private lastFailureTime?: number;
-  private state: 'closed' | 'open' | 'half-open' = 'closed';
+  private state: "closed" | "open" | "half-open" = "closed";
   private halfOpenAttempts = 0;
 
   constructor(private options: CircuitBreakerOptions = {}) {
@@ -112,12 +117,12 @@ export class CircuitBreaker {
   }
 
   async execute<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.state === 'open') {
+    if (this.state === "open") {
       if (this.shouldAttemptReset()) {
-        this.state = 'half-open';
+        this.state = "half-open";
         this.halfOpenAttempts = 0;
       } else {
-        throw new Error('Circuit breaker is open');
+        throw new Error("Circuit breaker is open");
       }
     }
 
@@ -133,11 +138,13 @@ export class CircuitBreaker {
 
   private shouldAttemptReset(): boolean {
     if (!this.lastFailureTime) return false;
-    return Date.now() - this.lastFailureTime >= (this.options.resetTimeout || 60000);
+    return (
+      Date.now() - this.lastFailureTime >= (this.options.resetTimeout || 60000)
+    );
   }
 
   private onSuccess(): void {
-    if (this.state === 'half-open') {
+    if (this.state === "half-open") {
       this.halfOpenAttempts++;
       if (this.halfOpenAttempts >= (this.options.halfOpenMaxAttempts || 3)) {
         this.reset();
@@ -151,18 +158,18 @@ export class CircuitBreaker {
     this.lastFailureTime = Date.now();
 
     if (this.failures >= (this.options.failureThreshold || 5)) {
-      this.state = 'open';
+      this.state = "open";
     }
 
-    if (this.state === 'half-open') {
-      this.state = 'open';
+    if (this.state === "half-open") {
+      this.state = "open";
     }
   }
 
   reset(): void {
     this.failures = 0;
     this.lastFailureTime = undefined;
-    this.state = 'closed';
+    this.state = "closed";
     this.halfOpenAttempts = 0;
   }
 
@@ -183,15 +190,14 @@ export class CircuitBreaker {
   }
 }
 
-export function createErrorHandler(context: string) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function createErrorHandler(_: string) {
   return (error: unknown): Error => {
     if (error instanceof Error) {
-      console.error(`[${context}] ${error.message}`, error.stack);
       return error;
     }
 
     const errorMessage = String(error);
-    console.error(`[${context}] ${errorMessage}`);
     return new Error(errorMessage);
   };
 }

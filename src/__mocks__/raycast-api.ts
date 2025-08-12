@@ -1,9 +1,9 @@
 export const showToast = jest.fn();
 export const Toast = {
   Style: {
-    Success: 'success',
-    Failure: 'failure',
-    Animated: 'animated',
+    Success: "success",
+    Failure: "failure",
+    Animated: "animated",
   },
 };
 
@@ -16,8 +16,8 @@ export const LocalStorage = {
 };
 
 export const getPreferenceValues = jest.fn(() => ({
-  developerFolder: '~/Developer',
-  openaiApiKey: 'test-api-key',
+  developerFolder: "~/Developer",
+  openaiApiKey: "test-api-key",
 }));
 
 export const ActionPanel = jest.fn();
@@ -32,11 +32,11 @@ export const useNavigation = jest.fn(() => ({
 }));
 
 export const environment = {
-  commandName: 'test-command',
-  commandMode: 'view',
-  extensionName: 'test-extension',
-  raycastVersion: '1.0.0',
-  supportPath: '/test/support',
-  assetsPath: '/test/assets',
+  commandName: "test-command",
+  commandMode: "view",
+  extensionName: "test-extension",
+  raycastVersion: "1.0.0",
+  supportPath: "/test/support",
+  assetsPath: "/test/assets",
   isDevelopment: true,
 };

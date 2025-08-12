@@ -1,9 +1,7 @@
 import { useNavigation } from "@raycast/api";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Layout } from "./types";
-import { GhosttyTabInfo, detectCurrentGhosttyTab } from "./utils";
 import RepoPicker from "./repo-picker";
-import TabChoice from "./tab-choice";
 
 interface Props {
   layout: Layout;
@@ -11,7 +9,6 @@ interface Props {
 
 export default function LaunchLayout({ layout }: Props) {
   const { push } = useNavigation();
-  const [tabInfo, setTabInfo] = useState<GhosttyTabInfo | null>(null);
 
   useEffect(() => {
     // Temporarily disabled current tab detection - go directly to repo picker
@@ -29,7 +26,7 @@ export default function LaunchLayout({ layout }: Props) {
     // }
 
     // checkCurrentTab();
-    
+
     // Go directly to repo picker for manual selection
     push(<RepoPicker layout={layout} target="new-tab" />);
   }, [layout, push]);

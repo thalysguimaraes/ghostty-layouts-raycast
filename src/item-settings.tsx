@@ -41,7 +41,7 @@ export default function ItemSettings({ item, itemType, onSave }: Props) {
         setSettings(JSON.parse(stored));
       }
     } catch (error) {
-      console.error("Failed to load settings:", error);
+      // Failed to load settings
     } finally {
       setIsLoading(false);
     }

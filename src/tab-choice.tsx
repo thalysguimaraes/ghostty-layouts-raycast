@@ -1,10 +1,4 @@
-import {
-  Action,
-  ActionPanel,
-  List,
-  Icon,
-  useNavigation,
-} from "@raycast/api";
+import { Action, ActionPanel, List, Icon, useNavigation } from "@raycast/api";
 import React from "react";
 import { Layout } from "./types";
 import { GhosttyTabInfo } from "./utils";
@@ -18,8 +12,8 @@ interface Props {
 export default function TabChoice({ layout, tabInfo }: Props) {
   const { push } = useNavigation();
 
-  const currentDirDisplay = tabInfo.currentDirectory 
-    ? tabInfo.currentDirectory.replace(process.env.HOME || '', '~')
+  const currentDirDisplay = tabInfo.currentDirectory
+    ? tabInfo.currentDirectory.replace(process.env.HOME || "", "~")
     : "Directory not detected - will use current location";
 
   const hasDirectory = !!tabInfo.currentDirectory;
@@ -32,7 +26,11 @@ export default function TabChoice({ layout, tabInfo }: Props) {
           subtitle={currentDirDisplay}
           icon={Icon.Terminal}
           accessories={[
-            { text: hasDirectory ? "Reuse existing tab" : "Select directory after" }
+            {
+              text: hasDirectory
+                ? "Reuse existing tab"
+                : "Select directory after",
+            },
           ]}
           actions={
             <ActionPanel>
@@ -42,12 +40,12 @@ export default function TabChoice({ layout, tabInfo }: Props) {
                   icon={Icon.ArrowRight}
                   onAction={() => {
                     push(
-                      <RepoPicker 
-                        layout={layout} 
-                        target="current" 
+                      <RepoPicker
+                        layout={layout}
+                        target="current"
                         useCurrentTab={true}
                         currentDirectory={tabInfo.currentDirectory}
-                      />
+                      />,
                     );
                   }}
                 />
@@ -64,7 +62,7 @@ export default function TabChoice({ layout, tabInfo }: Props) {
             </ActionPanel>
           }
         />
-        
+
         <List.Item
           title="Select Repository"
           subtitle="Choose a different repository"
