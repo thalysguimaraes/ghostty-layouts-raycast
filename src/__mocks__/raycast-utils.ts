@@ -9,3 +9,4 @@ export const useAI = jest.fn();
 export const withAccessToken = jest.fn();
 export const getAccessToken = jest.fn();
 export const authorize = jest.fn();
+export const runAppleScript = jest.fn().mockResolvedValue("");

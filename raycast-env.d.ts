@@ -18,6 +18,8 @@ type ExtensionPreferences = {
 declare type Preferences = ExtensionPreferences
 
 declare namespace Preferences {
+  /** Preferences accessible in the `launch-layouts` command */
+  export type LaunchLayouts = ExtensionPreferences & {}
   /** Preferences accessible in the `manage-layouts` command */
   export type ManageLayouts = ExtensionPreferences & {}
   /** Preferences accessible in the `ai-builder` command */
@@ -25,6 +27,8 @@ declare namespace Preferences {
 }
 
 declare namespace Arguments {
+  /** Arguments passed to the `launch-layouts` command */
+  export type LaunchLayouts = {}
   /** Arguments passed to the `manage-layouts` command */
   export type ManageLayouts = {}
   /** Arguments passed to the `ai-builder` command */

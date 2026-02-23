@@ -7,21 +7,23 @@ import {
   Toast,
   getPreferenceValues,
   useNavigation,
-  closeMainWindow,
-  PopToRootType,
 } from "@raycast/api";
 import React, { useState, useEffect } from "react";
 import { Layout } from "./types";
-import { GhosttyTarget, launchGhostty, createLayoutStructure } from "./utils";
+import { GhosttyTarget } from "./utils";
 import { readdir, stat } from "fs/promises";
-import { join, dirname } from "path";
+import { basename, dirname, join } from "path";
 import { homedir } from "os";
+import { launchLayoutInDirectory } from "./services/layout-launcher";
+import { getRecentRepos } from "./services/launch-context";
+import { isDirectory } from "./domain/paths";
 
 interface Props {
   layout: Layout;
   target: GhosttyTarget;
   useCurrentTab?: boolean;
   currentDirectory?: string;
+  initialPath?: string;
 }
 
 interface RepoFolder {
@@ -34,68 +36,106 @@ interface Preferences {
   developerFolder: string;
 }
 
-export default function RepoPicker({ layout, target }: Props) {
+interface RecentRepo {
+  name: string;
+  path: string;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const results: R[] = new Array(items.length);
+  let currentIndex = 0;
+
+  async function worker() {
+    while (currentIndex < items.length) {
+      const index = currentIndex;
+      currentIndex += 1;
+
+      results[index] = await mapper(items[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
+  );
+
+  return results;
+}
+
+export default function RepoPicker({
+  layout,
+  target,
+  useCurrentTab,
+  currentDirectory,
+  initialPath,
+}: Props) {
   const { pop } = useNavigation();
   const [repos, setRepos] = useState<RepoFolder[]>([]);
+  const [recentRepos, setRecentRepos] = useState<RecentRepo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLaunching, setIsLaunching] = useState(false);
   const [currentPath, setCurrentPath] = useState<string>("");
   const preferences = getPreferenceValues<Preferences>();
+  const developerPath = preferences.developerFolder.replace(/^~/, homedir());
 
   useEffect(() => {
-    // Temporarily disabled current tab functionality
-    // if (useCurrentTab && currentDirectory) {
-    //   handleLaunchInRepo(currentDirectory);
-    //   return;
-    // }
+    if (useCurrentTab && currentDirectory) {
+      void handleLaunchInRepo(currentDirectory);
+      return;
+    }
 
-    // Set up repo picker
-    const developerPath = preferences.developerFolder.replace(/^~/, homedir());
-    setCurrentPath(developerPath);
-  }, []);
+    const startingPath =
+      initialPath && initialPath.startsWith(developerPath)
+        ? initialPath
+        : developerPath;
+
+    setCurrentPath(startingPath);
+    void loadRecentRepositories();
+  }, [currentDirectory, developerPath, initialPath, useCurrentTab]);
 
   useEffect(() => {
     if (currentPath) {
-      loadRepos(currentPath);
+      void loadRepos(currentPath);
     }
   }, [currentPath]);
 
   async function loadRepos(path: string) {
     setIsLoading(true);
     try {
-      const items = await readdir(path);
-      const repoFolders: RepoFolder[] = [];
+      const entries = await readdir(path, { withFileTypes: true });
+      const directories = entries.filter(
+        (entry) => entry.isDirectory() && !entry.name.startsWith("."),
+      );
 
-      for (const item of items) {
-        // Skip hidden folders (those starting with .)
-        if (item.startsWith(".")) {
-          continue;
-        }
+      const repoFolders = await mapWithConcurrency(
+        directories,
+        12,
+        async (entry) => {
+          const fullPath = join(path, entry.name);
+          let isGitRepo = false;
 
-        const fullPath = join(path, item);
-        try {
-          const stats = await stat(fullPath);
-          if (stats.isDirectory()) {
-            // Check if it's a git repo
-            let isGitRepo = false;
-            try {
-              await stat(join(fullPath, ".git"));
-              isGitRepo = true;
-            } catch {
-              // Not a git repo, but still include it
-            }
-
-            repoFolders.push({
-              name: item,
-              path: fullPath,
-              isGitRepo,
-            });
+          try {
+            const gitStats = await stat(join(fullPath, ".git"));
+            isGitRepo = gitStats.isDirectory() || gitStats.isFile();
+          } catch {
+            isGitRepo = false;
           }
-        } catch {
-          // Skip items we can't access
-        }
-      }
 
-      // Sort: git repos first, then alphabetically
+          return {
+            name: entry.name,
+            path: fullPath,
+            isGitRepo,
+          };
+        },
+      );
+
       repoFolders.sort((a, b) => {
         if (a.isGitRepo && !b.isGitRepo) return -1;
         if (!a.isGitRepo && b.isGitRepo) return 1;
@@ -114,93 +154,105 @@ export default function RepoPicker({ layout, target }: Props) {
     }
   }
 
+  async function loadRecentRepositories() {
+    try {
+      const recent = await getRecentRepos();
+      const checked = await mapWithConcurrency(recent, 8, async (repoPath) => {
+        if (!(await isDirectory(repoPath))) {
+          return null;
+        }
+
+        return {
+          name: basename(repoPath),
+          path: repoPath,
+        } as RecentRepo;
+      });
+
+      setRecentRepos(
+        checked.filter((repo): repo is RecentRepo => repo !== null),
+      );
+    } catch {
+      setRecentRepos([]);
+    }
+  }
+
   function navigateToFolder(folderPath: string) {
     setCurrentPath(folderPath);
   }
 
   function navigateUp() {
     const parentPath = dirname(currentPath);
-    const developerPath = preferences.developerFolder.replace(/^~/, homedir());
 
-    // Don't go above the developer folder
     if (parentPath.length >= developerPath.length) {
       setCurrentPath(parentPath);
     }
   }
 
+  function normalizePathDisplay(path: string): string {
+    const home = homedir();
+    return path.startsWith(home) ? path.replace(home, "~") : path;
+  }
+
   function getRelativePath() {
-    const developerPath = preferences.developerFolder.replace(/^~/, homedir());
     if (currentPath === developerPath) {
-      return "~/Developer";
+      return normalizePathDisplay(developerPath);
     }
-    const relative = currentPath.replace(developerPath, "");
-    return `~/Developer${relative}`;
+
+    if (currentPath.startsWith(developerPath)) {
+      const relative = currentPath.replace(developerPath, "");
+      return `${normalizePathDisplay(developerPath)}${relative}`;
+    }
+
+    return normalizePathDisplay(currentPath);
   }
 
   async function handleLaunchInRepo(repoPath: string) {
+    setIsLaunching(true);
     try {
-      showToast({
-        style: Toast.Style.Animated,
-        title: "Launching layout...",
-        message: `${layout.name} in ${repoPath}`,
+      await launchLayoutInDirectory({
+        layout,
+        repoPath,
+        target,
       });
-
-      // Close Raycast window first to ensure Ghostty commands don't interfere with Raycast
-      await closeMainWindow({
-        clearRootSearch: false,
-        popToRootType: PopToRootType.Suspended,
-      });
-
-      // Give time for window transition to complete
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      if (target !== "current") {
-        // Only launch new tab/window if not using current
-        await launchGhostty(target);
-
-        // Additional delay to ensure Ghostty is ready
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      } else {
-        // For current tab, just ensure Ghostty is active
-        await launchGhostty(target);
-
-        // Shorter delay for current tab
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-
-      await createLayoutStructure(layout.structure, repoPath);
-
-      showToast({
-        style: Toast.Style.Success,
-        title: "Layout launched successfully",
-        message: layout.name,
-      });
-
+      await loadRecentRepositories();
       pop();
     } catch (error) {
       console.error("Layout launch error:", error);
-      showToast({
-        style: Toast.Style.Failure,
-        title: "Failed to launch layout",
-        message: error instanceof Error ? error.message : String(error),
-      });
+    } finally {
+      setIsLaunching(false);
     }
   }
 
-  const developerPath = preferences.developerFolder.replace(/^~/, homedir());
   const canGoUp = currentPath !== developerPath;
-
-  // Temporarily disabled current tab functionality
-  // if (useCurrentTab && currentDirectory) {
-  //   return null;
-  // }
 
   return (
     <List
-      isLoading={isLoading}
+      isLoading={isLoading || isLaunching}
       searchBarPlaceholder="Search folders and repositories..."
       navigationTitle={`${layout.name} - ${getRelativePath()}`}
     >
+      {recentRepos.length > 0 && (
+        <List.Section title="Recent Repositories">
+          {recentRepos.map((repo) => (
+            <List.Item
+              key={`recent-${repo.path}`}
+              title={repo.name}
+              subtitle={repo.path}
+              icon={Icon.Clock}
+              actions={
+                <ActionPanel>
+                  <Action
+                    title="Launch Layout Here"
+                    icon={Icon.ArrowRight}
+                    onAction={() => void handleLaunchInRepo(repo.path)}
+                  />
+                </ActionPanel>
+              }
+            />
+          ))}
+        </List.Section>
+      )}
+
       <List.Section title="Navigation">
         {canGoUp && (
           <List.Item
@@ -236,7 +288,7 @@ export default function RepoPicker({ layout, target }: Props) {
                   <Action
                     title="Launch Layout Here"
                     icon={Icon.ArrowRight}
-                    onAction={() => handleLaunchInRepo(repo.path)}
+                    onAction={() => void handleLaunchInRepo(repo.path)}
                   />
                 ) : (
                   <Action
@@ -249,7 +301,7 @@ export default function RepoPicker({ layout, target }: Props) {
                   <Action
                     title="Launch Layout Here Anyway"
                     icon={Icon.Terminal}
-                    onAction={() => handleLaunchInRepo(repo.path)}
+                    onAction={() => void handleLaunchInRepo(repo.path)}
                   />
                 )}
                 {repo.isGitRepo && (

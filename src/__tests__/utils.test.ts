@@ -1,340 +1,289 @@
-// Mock the modules before importing anything
+const mockExecAsync = jest.fn();
+
+const mockAdaptiveDelay = {
+  wait: jest.fn().mockResolvedValue(undefined),
+  recordSuccess: jest.fn(),
+  recordFailure: jest.fn(),
+  resetAll: jest.fn(),
+};
+
+const mockGhosttyController = {
+  activate: jest.fn().mockResolvedValue(undefined),
+  newTab: jest.fn().mockResolvedValue(undefined),
+  newWindow: jest.fn().mockResolvedValue(undefined),
+  split: jest.fn().mockResolvedValue(undefined),
+  navigate: jest.fn().mockResolvedValue(undefined),
+  sendText: jest.fn().mockResolvedValue(undefined),
+  pressEnter: jest.fn().mockResolvedValue(undefined),
+  getFrontmostAppName: jest.fn().mockResolvedValue("Ghostty"),
+  getWindowTitle: jest.fn().mockResolvedValue(""),
+  getWindowDescription: jest.fn().mockResolvedValue(""),
+  getWindowName: jest.fn().mockResolvedValue(""),
+};
+
 jest.mock("child_process");
 jest.mock("util", () => ({
-  promisify: jest.fn(() => jest.fn()),
+  promisify: jest.fn(() => mockExecAsync),
 }));
 
-import { promisify } from "util";
-import {
-  isGhosttyRunning,
-  getCurrentWorkingDirectoryFromShell,
-  detectCurrentGhosttyTab,
-  launchGhostty,
-  createSplit,
-  navigateToPane,
-  runCommand,
-  resetDelays,
-} from "../utils";
-
-// Mock the services
 jest.mock("../services/adaptive-delay", () => ({
-  AdaptiveDelay: jest.fn().mockImplementation(() => ({
-    wait: jest.fn().mockResolvedValue(undefined),
-    recordSuccess: jest.fn(),
-    recordFailure: jest.fn(),
-    reset: jest.fn(),
-    getStats: jest.fn().mockReturnValue({
-      currentDelay: 100,
-      successCount: 0,
-      failureCount: 0,
-      averageDelay: 100,
-    }),
-  })),
-  ContextualDelay: jest.fn().mockImplementation(() => ({
-    wait: jest.fn().mockResolvedValue(undefined),
-    recordSuccess: jest.fn(),
-    recordFailure: jest.fn(),
-    resetAll: jest.fn(),
-    getStats: jest.fn().mockReturnValue({
-      currentDelay: 100,
-      successCount: 0,
-      failureCount: 0,
-      averageDelay: 100,
-    }),
-  })),
+  ContextualDelay: jest.fn(() => mockAdaptiveDelay),
 }));
 
 jest.mock("../services/error-handler", () => ({
   withRetry: jest.fn((fn) => fn()),
   withTimeout: jest.fn((promise) => promise),
-  ScriptExecutionError: Error,
-  TimeoutError: Error,
+  ScriptExecutionError: class ScriptExecutionError extends Error {},
+  TimeoutError: class TimeoutError extends Error {},
   createErrorHandler: jest.fn(() => jest.fn((error) => error)),
 }));
 
-describe("Utils", () => {
-  let mockExecAsync: jest.Mock;
+jest.mock("../services/ghostty/controller-keystrokes", () => ({
+  keystrokeGhosttyController: mockGhosttyController,
+}));
 
+import {
+  createSplit,
+  detectCurrentGhosttyTab,
+  getCurrentWorkingDirectoryFromShell,
+  isGhosttyRunning,
+  launchGhostty,
+  navigateToPane,
+  resetDelays,
+  runCommand,
+} from "../utils";
+
+describe("utils", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockExecAsync = jest.fn();
-    (promisify as unknown as jest.Mock).mockReturnValue(mockExecAsync);
+    mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
+
+    mockGhosttyController.activate.mockResolvedValue(undefined);
+    mockGhosttyController.newTab.mockResolvedValue(undefined);
+    mockGhosttyController.newWindow.mockResolvedValue(undefined);
+    mockGhosttyController.split.mockResolvedValue(undefined);
+    mockGhosttyController.navigate.mockResolvedValue(undefined);
+    mockGhosttyController.sendText.mockResolvedValue(undefined);
+    mockGhosttyController.pressEnter.mockResolvedValue(undefined);
+    mockGhosttyController.getFrontmostAppName.mockResolvedValue("Ghostty");
+    mockGhosttyController.getWindowTitle.mockResolvedValue("");
+    mockGhosttyController.getWindowDescription.mockResolvedValue("");
+    mockGhosttyController.getWindowName.mockResolvedValue("");
   });
 
   describe("isGhosttyRunning", () => {
-    it("should return true when Ghostty is running", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "12345\n", stderr: "" });
+    it("returns true when pgrep finds Ghostty", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "12345\n", stderr: "" });
 
-      const result = await isGhosttyRunning();
-
-      expect(result).toBe(true);
+      await expect(isGhosttyRunning()).resolves.toBe(true);
       expect(mockExecAsync).toHaveBeenCalledWith('pgrep -f "Ghostty"');
     });
 
-    it("should return false when Ghostty is not running", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
+    it("returns false when pgrep returns empty output", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "", stderr: "" });
 
-      const result = await isGhosttyRunning();
-
-      expect(result).toBe(false);
+      await expect(isGhosttyRunning()).resolves.toBe(false);
     });
 
-    it("should return false on error", async () => {
-      mockExecAsync.mockRejectedValue(new Error("pgrep failed"));
+    it("returns false when pgrep fails", async () => {
+      mockExecAsync.mockRejectedValueOnce(new Error("pgrep failed"));
 
-      const result = await isGhosttyRunning();
-
-      expect(result).toBe(false);
+      await expect(isGhosttyRunning()).resolves.toBe(false);
     });
   });
 
   describe("getCurrentWorkingDirectoryFromShell", () => {
-    it("should parse directory from window title with colon pattern", async () => {
-      mockExecAsync.mockResolvedValue({
-        stdout: "user@host:/Users/test/project\n",
-        stderr: "",
-      });
+    it("parses path from title with colon format", async () => {
+      mockGhosttyController.getWindowTitle.mockResolvedValueOnce(
+        "user@host:/Users/test/project",
+      );
 
-      const result = await getCurrentWorkingDirectoryFromShell();
-
-      expect(result).toBe("/Users/test/project");
+      await expect(getCurrentWorkingDirectoryFromShell()).resolves.toBe(
+        "/Users/test/project",
+      );
     });
 
-    it("should expand tilde to home directory", async () => {
+    it("expands home when title contains tilde", async () => {
       process.env.HOME = "/Users/test";
-      mockExecAsync.mockResolvedValue({
-        stdout: "~/Developer\n",
-        stderr: "",
-      });
+      mockGhosttyController.getWindowTitle.mockResolvedValueOnce("~/Developer");
 
-      const result = await getCurrentWorkingDirectoryFromShell();
-
-      expect(result).toBe("/Users/test/Developer");
+      await expect(getCurrentWorkingDirectoryFromShell()).resolves.toBe(
+        "/Users/test/Developer",
+      );
     });
 
-    it("should return undefined when no directory found", async () => {
-      mockExecAsync.mockResolvedValue({
-        stdout: "Some Random Title\n",
-        stderr: "",
-      });
+    it("returns undefined when title has no path", async () => {
+      mockGhosttyController.getWindowTitle.mockResolvedValueOnce(
+        "Ghostty Terminal",
+      );
 
-      const result = await getCurrentWorkingDirectoryFromShell();
-
-      expect(result).toBeUndefined();
+      await expect(
+        getCurrentWorkingDirectoryFromShell(),
+      ).resolves.toBeUndefined();
     });
 
-    it("should handle errors gracefully", async () => {
-      mockExecAsync.mockRejectedValue(new Error("AppleScript failed"));
+    it("returns undefined on controller errors", async () => {
+      mockGhosttyController.getWindowTitle.mockRejectedValueOnce(
+        new Error("denied"),
+      );
 
-      const result = await getCurrentWorkingDirectoryFromShell();
-
-      expect(result).toBeUndefined();
-      expect(console.error).toHaveBeenCalled();
+      await expect(
+        getCurrentWorkingDirectoryFromShell(),
+      ).resolves.toBeUndefined();
     });
   });
 
   describe("detectCurrentGhosttyTab", () => {
-    it("should detect single tab with directory", async () => {
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: "12345\n", stderr: "" }) // isGhosttyRunning
-        .mockResolvedValueOnce({
-          stdout: "Ghostty - /Users/test\n",
-          stderr: "",
-        }) // window title
-        .mockRejectedValueOnce(new Error("No subtitle")); // subtitle (optional)
+    it("returns directory from subtitle when available", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "123\n", stderr: "" });
+      mockGhosttyController.getWindowTitle.mockResolvedValueOnce("Ghostty");
+      mockGhosttyController.getWindowDescription.mockResolvedValueOnce(
+        "/Users/test/repo",
+      );
 
-      const result = await detectCurrentGhosttyTab();
-
-      expect(result.isSingleTab).toBe(true);
-      expect(result.currentDirectory).toBe("/Users/test");
+      await expect(detectCurrentGhosttyTab()).resolves.toEqual({
+        isSingleTab: true,
+        currentDirectory: "/Users/test/repo",
+      });
     });
 
-    it("should return false when Ghostty is not running", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
+    it("returns false when Ghostty is not running", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "", stderr: "" });
 
-      const result = await detectCurrentGhosttyTab();
-
-      expect(result.isSingleTab).toBe(false);
-      expect(result.currentDirectory).toBeUndefined();
+      await expect(detectCurrentGhosttyTab()).resolves.toEqual({
+        isSingleTab: false,
+      });
     });
 
-    it("should handle errors and return false", async () => {
-      mockExecAsync.mockRejectedValue(new Error("Failed"));
+    it("falls back to window name when title access fails", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "123\n", stderr: "" });
+      mockGhosttyController.getWindowTitle.mockRejectedValueOnce(
+        new Error("no accessibility"),
+      );
+      mockGhosttyController.getWindowName.mockResolvedValueOnce(
+        "Ghostty - /Users/test/window",
+      );
 
-      const result = await detectCurrentGhosttyTab();
-
-      expect(result.isSingleTab).toBe(false);
-      expect(console.error).toHaveBeenCalled();
+      await expect(detectCurrentGhosttyTab()).resolves.toEqual({
+        isSingleTab: true,
+        currentDirectory: "/Users/test/window",
+      });
     });
   });
 
   describe("launchGhostty", () => {
-    it("should activate existing window for current target", async () => {
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: "12345\n", stderr: "" }) // isGhosttyRunning
-        .mockResolvedValueOnce({ stdout: "", stderr: "" }) // activate
-        .mockResolvedValueOnce({ stdout: "Ghostty\n", stderr: "" }); // frontmost check
+    it("activates current window when target is current", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "123\n", stderr: "" });
 
       await launchGhostty("current");
 
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining('tell application \\"Ghostty\\" to activate'),
-      );
+      expect(mockGhosttyController.activate).toHaveBeenCalled();
+      expect(mockGhosttyController.newTab).not.toHaveBeenCalled();
     });
 
-    it("should create new tab when running", async () => {
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: "12345\n", stderr: "" }) // isGhosttyRunning
-        .mockResolvedValue({ stdout: "", stderr: "" }); // Various AppleScript calls
+    it("creates new tab when target is new-tab", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "123\n", stderr: "" });
 
       await launchGhostty("new-tab");
 
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining('keystroke \\"t\\" using {command down}'),
-      );
+      expect(mockGhosttyController.newTab).toHaveBeenCalled();
     });
 
-    it("should create new window when running", async () => {
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: "12345\n", stderr: "" }) // isGhosttyRunning
-        .mockResolvedValue({ stdout: "", stderr: "" }); // Various AppleScript calls
+    it("creates new window when running and target is new-window", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "123\n", stderr: "" });
 
       await launchGhostty("new-window");
 
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'keystroke \\"n\\" using {command down, shift down}',
-        ),
-      );
+      expect(mockGhosttyController.newWindow).toHaveBeenCalled();
     });
 
-    it("should launch Ghostty if not running", async () => {
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: "", stderr: "" }) // isGhosttyRunning returns false
-        .mockResolvedValue({ stdout: "", stderr: "" }); // open -a Ghostty
+    it("opens Ghostty app when not running", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "", stderr: "" });
 
       await launchGhostty("new-window");
 
       expect(mockExecAsync).toHaveBeenCalledWith("open -a Ghostty");
     });
 
-    it("should throw error on failure", async () => {
-      mockExecAsync.mockRejectedValue(new Error("Launch failed"));
+    it("throws when controller activation fails", async () => {
+      mockExecAsync.mockResolvedValueOnce({ stdout: "123\n", stderr: "" });
+      mockGhosttyController.activate.mockRejectedValueOnce(new Error("boom"));
 
-      await expect(launchGhostty()).rejects.toThrow(
+      await expect(launchGhostty("current")).rejects.toThrow(
         "Failed to launch Ghostty. Make sure Ghostty is installed.",
       );
     });
   });
 
   describe("createSplit", () => {
-    it("should create vertical split", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
-
+    it("creates vertical split", async () => {
       await createSplit("vertical");
 
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining('keystroke "d" using {command down}'),
-      );
+      expect(mockGhosttyController.split).toHaveBeenCalledWith("vertical");
     });
 
-    it("should create horizontal split", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
-
+    it("creates horizontal split", async () => {
       await createSplit("horizontal");
 
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'keystroke "d" using {shift down, command down}',
-        ),
-      );
+      expect(mockGhosttyController.split).toHaveBeenCalledWith("horizontal");
     });
 
-    it("should handle errors", async () => {
-      mockExecAsync.mockRejectedValue(new Error("Split failed"));
+    it("throws when split command fails", async () => {
+      mockGhosttyController.split.mockRejectedValueOnce(
+        new Error("split fail"),
+      );
 
       await expect(createSplit("vertical")).rejects.toThrow(
         "Failed to create split",
       );
-      expect(console.error).toHaveBeenCalled();
     });
   });
 
   describe("navigateToPane", () => {
-    const keyCodes = {
-      left: "123",
-      right: "124",
-      up: "126",
-      down: "125",
-    };
-
     it.each(["left", "right", "up", "down"] as const)(
-      "should navigate %s",
+      "navigates %s",
       async (direction) => {
-        mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
-
         await navigateToPane(direction);
 
-        expect(mockExecAsync).toHaveBeenCalledWith(
-          expect.stringContaining(`key code ${keyCodes[direction]}`),
-        );
+        expect(mockGhosttyController.navigate).toHaveBeenCalledWith(direction);
       },
     );
   });
 
   describe("runCommand", () => {
-    it("should run command without working directory", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
-
+    it("sends command text and presses enter", async () => {
       await runCommand("ls -la");
 
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining('keystroke "ls -la"'),
-      );
+      expect(mockGhosttyController.sendText).toHaveBeenCalledWith("ls -la");
+      expect(mockGhosttyController.pressEnter).toHaveBeenCalled();
     });
 
-    it("should run command with working directory", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
+    it("prepends directory change when working directory is provided", async () => {
       process.env.HOME = "/Users/test";
 
       await runCommand("npm start", "~/Developer/project");
 
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'cd \\"/Users/test/Developer/project\\" && npm start',
-        ),
+      expect(mockGhosttyController.sendText).toHaveBeenCalledWith(
+        'cd "/Users/test/Developer/project" && npm start',
       );
     });
 
-    it("should escape special characters", async () => {
-      mockExecAsync.mockResolvedValue({ stdout: "", stderr: "" });
-
-      await runCommand('echo "Hello \\ World"');
-
-      expect(mockExecAsync).toHaveBeenCalledWith(
-        expect.stringContaining('echo \\\\\\"Hello \\\\\\\\ World\\\\\\"'),
+    it("throws when sending text fails", async () => {
+      mockGhosttyController.sendText.mockRejectedValueOnce(
+        new Error("send failed"),
       );
-    });
 
-    it("should handle errors", async () => {
-      mockExecAsync.mockRejectedValue(new Error("Command failed"));
-
-      await expect(runCommand("failing-command")).rejects.toThrow(
-        "Failed to run command: failing-command",
+      await expect(runCommand("npm start")).rejects.toThrow(
+        "Failed to run command: npm start",
       );
-      expect(console.error).toHaveBeenCalled();
     });
   });
 
   describe("resetDelays", () => {
-    it("should reset all delays", async () => {
-      const adaptiveDelayModule = await import("../services/adaptive-delay");
-      const { ContextualDelay } = adaptiveDelayModule;
-      const instance = new ContextualDelay();
-
+    it("resets contextual delays", () => {
       resetDelays();
 
-      expect(instance.resetAll).toHaveBeenCalled();
+      expect(mockAdaptiveDelay.resetAll).toHaveBeenCalled();
     });
   });
 });

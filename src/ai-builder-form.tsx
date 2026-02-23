@@ -1,18 +1,24 @@
 import {
+  AI,
   Action,
   ActionPanel,
   Form,
   Icon,
+  getPreferenceValues,
   showToast,
   Toast,
   useNavigation,
-  getPreferenceValues,
 } from "@raycast/api";
 import React, { useState } from "react";
-import { Layout, Split, Pane } from "./types";
-import { saveLayout } from "./layouts";
-import { v4 as uuidv4 } from "uuid";
 import OpenAI from "openai";
+import { v4 as uuidv4 } from "uuid";
+import { saveLayout } from "./layouts";
+import { Layout, Pane, Split } from "./types";
+import {
+  AILayoutPayload,
+  parseAILayoutPayload,
+  parseJsonValue,
+} from "./domain/schema";
 
 interface Preferences {
   openaiApiKey?: string;
@@ -20,6 +26,49 @@ interface Preferences {
 
 interface Props {
   onSave: () => void;
+}
+
+function buildLayoutPrompt(description: string): string {
+  return `You design productive Ghostty terminal layouts.
+
+Return only valid JSON with this shape:
+{
+  "name": "string",
+  "description": "string",
+  "structure": {
+    "direction": "vertical" | "horizontal",
+    "panes": [Pane | Split]
+  }
+}
+
+Pane shape:
+{
+  "command": "string",
+  "workingDirectory": "string (optional)",
+  "size": number (optional, 1-100)
+}
+
+Rules:
+- vertical = side by side panes
+- horizontal = top/bottom panes
+- use practical commands for developer workflow
+- keep pane hierarchy coherent and realistic
+- include size only when useful
+
+User description:
+"${description}"`;
+}
+
+function buildRepairPrompt(rawResponse: string, error: string): string {
+  return `Fix this JSON for the Ghostty layout schema.
+
+Validation error:
+${error}
+
+Original response:
+${rawResponse}
+
+Return only valid JSON. Do not add markdown.`;
 }
 
 export default function AIBuilderForm({ onSave }: Props) {
@@ -30,20 +79,59 @@ export default function AIBuilderForm({ onSave }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedLayout, setGeneratedLayout] = useState<Layout | null>(null);
 
-  async function generateLayout() {
-    if (!description.trim()) {
-      showToast({
-        style: Toast.Style.Failure,
-        title: "Description is required",
-      });
-      return;
+  async function requestWithRaycastAI(prompt: string): Promise<string> {
+    return AI.ask(prompt, {
+      creativity: "low",
+      model: AI.Model["OpenAI_GPT4o-mini"],
+    });
+  }
+
+  async function requestWithOpenAI(prompt: string): Promise<string> {
+    if (!preferences.openaiApiKey) {
+      throw new Error(
+        "Raycast AI unavailable and no OpenAI API key configured in preferences",
+      );
     }
 
-    if (!preferences.openaiApiKey) {
-      showToast({
+    const openai = new OpenAI({ apiKey: preferences.openaiApiKey });
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a Ghostty terminal layout expert. Respond only with strict JSON.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: 1000,
+    });
+
+    const response = completion.choices[0]?.message?.content;
+    if (!response) {
+      throw new Error("No response from OpenAI");
+    }
+
+    return response;
+  }
+
+  async function requestLayout(prompt: string): Promise<string> {
+    try {
+      return await requestWithRaycastAI(prompt);
+    } catch (raycastError) {
+      return requestWithOpenAI(prompt);
+    }
+  }
+
+  async function generateLayout() {
+    if (!description.trim()) {
+      await showToast({
         style: Toast.Style.Failure,
-        title: "OpenAI API Key Required",
-        message: "Please set your API key in extension preferences",
+        title: "Description is required",
       });
       return;
     }
@@ -51,88 +139,27 @@ export default function AIBuilderForm({ onSave }: Props) {
     setIsGenerating(true);
 
     try {
-      const openai = new OpenAI({
-        apiKey: preferences.openaiApiKey,
-      });
-      showToast({
+      const toast = await showToast({
         style: Toast.Style.Animated,
         title: "AI is generating your layout...",
       });
 
-      const prompt = `
-You are an expert terminal layout designer. Convert the following natural language description into a Ghostty terminal layout structure.
+      const prompt = buildLayoutPrompt(description.trim());
+      const firstResponse = await requestLayout(prompt);
 
-Description: "${description}"
-
-You must respond with ONLY valid JSON that matches this TypeScript interface:
-
-interface Pane {
-  command: string;
-  workingDirectory?: string;
-  size?: number; // percentage for splits
-}
-
-interface Split {
-  direction: "vertical" | "horizontal";
-  panes: (Pane | Split)[];
-}
-
-interface Layout {
-  name: string;
-  description: string;
-  structure: Split;
-}
-
-Rules:
-- "vertical" splits create side-by-side panes
-- "horizontal" splits create top/bottom panes
-- Use common terminal commands (nvim, vim, zsh, bash, npm run dev, etc.)
-- For development work, include editors, servers, git tools
-- Make logical directory assignments
-- Keep it practical and usable
-- Include size percentages for main/secondary panes when appropriate
-
-Example structure for "editor and terminal":
-{
-  "name": "Editor and Terminal",
-  "description": "Code editor with terminal below",
-  "structure": {
-    "direction": "horizontal",
-    "panes": [
-      { "command": "nvim", "size": 70 },
-      { "command": "zsh", "size": 30 }
-    ]
-  }
-}
-
-Respond with JSON only:`;
-
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a terminal layout expert. Respond with valid JSON only, no explanations or markdown formatting.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1000,
-      });
-
-      const response = completion.choices[0]?.message?.content;
-      if (!response) {
-        throw new Error("No response from AI");
+      let aiLayout: AILayoutPayload;
+      try {
+        aiLayout = parseAILayoutPayload(parseJsonValue(firstResponse));
+      } catch (error) {
+        toast.message = "Repairing AI output...";
+        const repairResponse = await requestLayout(
+          buildRepairPrompt(
+            firstResponse,
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+        aiLayout = parseAILayoutPayload(parseJsonValue(repairResponse));
       }
-
-      console.log("AI Response:", response);
-
-      // Parse the JSON response
-      const aiLayout = JSON.parse(response.trim());
 
       const layout: Layout = {
         id: uuidv4(),
@@ -143,14 +170,12 @@ Respond with JSON only:`;
 
       setGeneratedLayout(layout);
 
-      showToast({
-        style: Toast.Style.Success,
-        title: "Layout generated successfully!",
-        message: "Review and save your layout",
-      });
+      toast.style = Toast.Style.Success;
+      toast.title = "Layout generated successfully";
+      toast.message = "Review and save your layout";
     } catch (error) {
       console.error("AI generation error:", error);
-      showToast({
+      await showToast({
         style: Toast.Style.Failure,
         title: "Failed to generate layout",
         message: error instanceof Error ? error.message : "Unknown error",
@@ -161,12 +186,14 @@ Respond with JSON only:`;
   }
 
   async function saveGeneratedLayout() {
-    if (!generatedLayout) return;
+    if (!generatedLayout) {
+      return;
+    }
 
     try {
       await saveLayout(generatedLayout);
 
-      showToast({
+      await showToast({
         style: Toast.Style.Success,
         title: "Layout saved successfully",
       });
@@ -174,7 +201,7 @@ Respond with JSON only:`;
       onSave();
       pop();
     } catch (error) {
-      showToast({
+      await showToast({
         style: Toast.Style.Failure,
         title: "Failed to save layout",
         message: String(error),
@@ -184,32 +211,30 @@ Respond with JSON only:`;
 
   function renderLayoutPreview(structure: Split | Pane, depth = 0): string {
     if ("command" in structure) {
-      // It's a pane
       const indent = "  ".repeat(depth);
       const workingDir = structure.workingDirectory
         ? ` (${structure.workingDirectory})`
         : "";
       const size = structure.size ? ` [${structure.size}%]` : "";
       return `${indent}📟 \`${structure.command}\`${workingDir}${size}`;
-    } else {
-      // It's a split
-      const { direction, panes } = structure;
-      const indent = "  ".repeat(depth);
-      const directionIcon = direction === "vertical" ? "↔️" : "↕️";
-      const directionText =
-        direction === "vertical" ? "Vertical Split" : "Horizontal Split";
-
-      let result = `${indent}${directionIcon} **${directionText}**\n`;
-
-      panes.forEach((pane: Split | Pane, index: number) => {
-        result += renderLayoutPreview(pane, depth + 1);
-        if (index < panes.length - 1) {
-          result += "\n";
-        }
-      });
-
-      return result;
     }
+
+    const { direction, panes } = structure;
+    const indent = "  ".repeat(depth);
+    const directionIcon = direction === "vertical" ? "↔️" : "↕️";
+    const directionText =
+      direction === "vertical" ? "Vertical Split" : "Horizontal Split";
+
+    let result = `${indent}${directionIcon} **${directionText}**\n`;
+
+    panes.forEach((pane: Split | Pane, index: number) => {
+      result += renderLayoutPreview(pane, depth + 1);
+      if (index < panes.length - 1) {
+        result += "\n";
+      }
+    });
+
+    return result;
   }
 
   return (
@@ -235,7 +260,7 @@ Respond with JSON only:`;
                 icon={Icon.ArrowClockwise}
                 onAction={() => {
                   setGeneratedLayout(null);
-                  generateLayout();
+                  void generateLayout();
                 }}
               />
             </>
@@ -254,7 +279,7 @@ Respond with JSON only:`;
       <Form.TextArea
         id="description"
         title="Describe Your Layout"
-        placeholder="I want a layout with Neovim taking 70% of the screen on the left, and on the right side I want two horizontal panes - one running npm run dev and another with lazygit"
+        placeholder="I want Neovim on the left and two panes on the right running npm run dev and lazygit"
         value={description}
         onChange={setDescription}
       />
@@ -277,12 +302,10 @@ Respond with JSON only:`;
 • "Full stack setup with frontend dev server, backend API, and database console"`}
       />
 
-      {!preferences.openaiApiKey && (
-        <Form.Description
-          title="⚠️ API Key Required"
-          text="To use AI Layout Builder, please set your OpenAI API key in Raycast Settings → Extensions → Ghostty Layouts → Preferences"
-        />
-      )}
+      <Form.Description
+        title="AI Provider"
+        text="Uses Raycast AI by default. OpenAI API key in preferences is an optional fallback."
+      />
     </Form>
   );
 }

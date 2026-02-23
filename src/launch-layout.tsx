@@ -1,36 +1,97 @@
 import { useNavigation } from "@raycast/api";
 import React, { useEffect } from "react";
 import { Layout } from "./types";
-import RepoPicker from "./repo-picker";
+import RepoSearch from "./repo-search";
+import { detectCurrentGhosttyTab, GhosttyTarget } from "./utils";
+import { getLastUsedRepo } from "./services/launch-context";
+import { launchLayoutInDirectory } from "./services/layout-launcher";
+import { expandHomePath, isDirectory } from "./domain/paths";
 
 interface Props {
   layout: Layout;
+  target?: GhosttyTarget;
+  preferredRepoPath?: string;
 }
 
-export default function LaunchLayout({ layout }: Props) {
+export default function LaunchLayout({
+  layout,
+  target = "new-tab",
+  preferredRepoPath,
+}: Props) {
   const { push } = useNavigation();
 
   useEffect(() => {
-    // Temporarily disabled current tab detection - go directly to repo picker
-    // async function checkCurrentTab() {
-    //   const info = await detectCurrentGhosttyTab();
-    //   setTabInfo(info);
+    let cancelled = false;
 
-    //   if (info.isSingleTab) {
-    //     // Show choice UI when single tab is detected (even without directory)
-    //     push(<TabChoice layout={layout} tabInfo={info} />);
-    //   } else {
-    //     // Default to repo picker
-    //     push(<RepoPicker layout={layout} target="new-tab" />);
-    //   }
-    // }
+    async function launchFromPath(pathValue: string): Promise<boolean> {
+      const normalizedPath = expandHomePath(pathValue);
+      if (!(await isDirectory(normalizedPath))) {
+        return false;
+      }
 
-    // checkCurrentTab();
+      await launchLayoutInDirectory({
+        layout,
+        repoPath: normalizedPath,
+        target,
+      });
 
-    // Go directly to repo picker for manual selection
-    push(<RepoPicker layout={layout} target="new-tab" />);
-  }, [layout, push]);
+      return true;
+    }
 
-  // This component just handles the navigation logic
+    async function run() {
+      try {
+        if (preferredRepoPath && (await launchFromPath(preferredRepoPath))) {
+          return;
+        }
+
+        const lastUsedRepo = await getLastUsedRepo(layout.id);
+        if (target !== "current") {
+          const primaryCandidates = [lastUsedRepo, layout.rootDirectory];
+
+          for (const candidate of primaryCandidates) {
+            if (!candidate) {
+              continue;
+            }
+
+            if (await launchFromPath(candidate)) {
+              return;
+            }
+          }
+        }
+
+        const tabInfo = await detectCurrentGhosttyTab();
+        const currentTabDirectory = tabInfo.currentDirectory;
+
+        const fallbackCandidates =
+          target === "current"
+            ? [currentTabDirectory, lastUsedRepo, layout.rootDirectory]
+            : [currentTabDirectory];
+
+        for (const candidate of fallbackCandidates) {
+          if (!candidate) {
+            continue;
+          }
+
+          if (await launchFromPath(candidate)) {
+            return;
+          }
+        }
+
+        if (!cancelled) {
+          push(<RepoSearch layout={layout} target={target} />);
+        }
+      } catch (error) {
+        console.error("Launch routing error:", error);
+        return;
+      }
+    }
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [layout, preferredRepoPath, push, target]);
+
   return null;
 }

@@ -190,14 +190,15 @@ export class CircuitBreaker {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function createErrorHandler(_: string) {
+export function createErrorHandler(context: string) {
   return (error: unknown): Error => {
     if (error instanceof Error) {
+      console.error(`[${context}] ${error.message}`, error.stack);
       return error;
     }
 
     const errorMessage = String(error);
+    console.error(`[${context}] ${errorMessage}`);
     return new Error(errorMessage);
   };
 }

@@ -18,6 +18,7 @@ import LaunchLayout from "./launch-layout";
 import AIBuilderForm from "./ai-builder-form";
 import LayoutEditor from "./layout-editor";
 import { v4 as uuidv4 } from "uuid";
+import RepoSearch from "./repo-search";
 
 export default function Command() {
   const [layouts, setLayouts] = useState<Layout[]>([]);
@@ -94,9 +95,9 @@ export default function Command() {
       {layouts.length === 0 && (
         <List.Section title="Getting Started">
           <List.Item
-            title="Keyboard Shortcuts Available"
-            subtitle="Go to Raycast Settings → Extensions → Ghostty Layouts to assign hotkeys to template commands"
-            icon={Icon.Keyboard}
+            title="Use Launch Ghostty Layout"
+            subtitle="Use the dedicated launch command for a one-step flow"
+            icon={Icon.ArrowRight}
           />
         </List.Section>
       )}
@@ -119,6 +120,21 @@ export default function Command() {
                   target={<LaunchLayout layout={layout} />}
                 />
                 <Action.Push
+                  title="Launch in Current Tab"
+                  icon={Icon.Terminal}
+                  target={<LaunchLayout layout={layout} target="current" />}
+                />
+                <Action.Push
+                  title="Launch in New Window"
+                  icon={Icon.AppWindowGrid3x3}
+                  target={<LaunchLayout layout={layout} target="new-window" />}
+                />
+                <Action.Push
+                  title="Pick Repository"
+                  icon={Icon.Folder}
+                  target={<RepoSearch layout={layout} target="new-tab" />}
+                />
+                <Action.Push
                   title="Edit Layout"
                   icon={Icon.Pencil}
                   target={<LayoutEditor layout={layout} onSave={loadLayouts} />}
@@ -137,7 +153,7 @@ export default function Command() {
 
       <List.Section
         title="Ready-to-Use Templates"
-        subtitle="Templates have their own commands - assign keyboard shortcuts in Raycast Settings"
+        subtitle="Launch instantly or create a custom layout from template"
       >
         {LAYOUT_PRESETS.map((preset) => (
           <List.Item
@@ -160,6 +176,21 @@ export default function Command() {
                         description: preset.description,
                         structure: preset.structure,
                       }}
+                    />
+                  }
+                />
+                <Action.Push
+                  title="Launch Template in Current Tab"
+                  icon={Icon.Terminal}
+                  target={
+                    <LaunchLayout
+                      layout={{
+                        id: "temp-" + preset.name,
+                        name: preset.name,
+                        description: preset.description,
+                        structure: preset.structure,
+                      }}
+                      target="current"
                     />
                   }
                 />

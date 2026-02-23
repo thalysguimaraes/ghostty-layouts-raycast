@@ -107,8 +107,7 @@ describe("withRetry", () => {
       exponentialBackoff: true,
     });
 
-    // Wait for the promise to complete
-    jest.runAllTimers();
+    await jest.runAllTimersAsync();
 
     const result = await promise;
     expect(result).toBe("success");

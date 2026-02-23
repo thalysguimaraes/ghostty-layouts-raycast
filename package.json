@@ -11,9 +11,16 @@
   "license": "MIT",
   "commands": [
     {
+      "name": "launch-layouts",
+      "title": "Launch Ghostty Layout",
+      "subtitle": "Fast launch with smart defaults",
+      "description": "Launch layouts and templates with minimum friction",
+      "mode": "view"
+    },
+    {
       "name": "manage-layouts",
       "title": "Manage Ghostty Layouts",
-      "subtitle": "Create and launch terminal layouts",
+      "subtitle": "Create and edit layouts",
       "description": "Manage your Ghostty terminal layout templates",
       "mode": "view"
     },
